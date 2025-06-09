@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "731860151951",
+    "project_id": "tripexpenseapp-542a8",
+    "storage_bucket": "tripexpenseapp-542a8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:731860151951:android:ca0050b7728b7ac50a0afa",
+        "android_client_info": {
+          "package_name": "com.example.group_expense_splitter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0_xZt4QwNjgrP2kol-62s15TjL4QiyNU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
