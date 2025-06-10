@@ -47,6 +47,8 @@ class _HomePageState extends State<HomePage> {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const AddTripsPage()));
                 },
               ),
+
+
               const Divider(color: textSecondaryColor_50),
               ListTile(
                 leading: const Icon(Icons.qr_code_scanner, color: dialogIconColor),

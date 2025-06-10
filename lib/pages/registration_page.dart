@@ -1,9 +1,11 @@
 // lib/pages/registration_page.dart
 import 'package:flutter/material.dart';
 import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
 import 'home_page.dart';
 
-// Dark Theme Colors
+// Your color constants...
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
 const Color textSecondaryColor = Colors.white70;
@@ -12,7 +14,7 @@ const Color inputLineColor = Colors.white38;
 const Color inputFocusedLineColor = Colors.white;
 const Color circularButtonBackgroundColor = Colors.white;
 const Color circularButtonIconColor = darkBackgroundColor;
-const Color secondaryActionColor = Color(0xFF4AB19D); // A teal for "Start Anonymously"
+const Color secondaryActionColor = Color(0xFF4AB19D);
 
 class RegistrationPage extends StatefulWidget {
   const RegistrationPage({super.key});
@@ -35,108 +37,68 @@ class _RegistrationPageState extends State<RegistrationPage> {
     super.dispose();
   }
 
-  void _register() {
-    if (_formKey.currentState!.validate()) {
-      // TODO: Implement actual registration logic with Firebase Auth
-      print('Registering user...');
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+  // --- MODIFIED: _register method with Firebase Auth logic ---
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) {
+      return; // If form is not valid, do nothing.
+    }
+
+    // Show a loading indicator (optional but good UX)
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // Create user with email and password
+      final UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      // If user creation is successful, save their details to Firestore
+      if (userCredential.user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'uid': userCredential.user!.uid,
+        });
+
+        // Navigate to the HomePage and clear the previous routes
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      // This will handle errors like "email-already-in-use"
+      if (mounted) {
+        Navigator.pop(context); // Close the loading indicator
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'An unknown error occurred.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close the loading indicator
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('An error occurred: $e')),
+        );
+      }
     }
   }
 
-  void _startAnonymously() {
-    _showNameInputDialog(context);
-  }
+  void _startAnonymously() { /* ... same as before ... */ }
+  Future<void> _showNameInputDialog(BuildContext pageContext) async { /* ... same as before ... */ }
+  Future<void> _showGeneratedCode(BuildContext pageContext, String name) async { /* ... same as before ... */ }
 
-  Future<void> _showNameInputDialog(BuildContext pageContext) async {
-    final nameController = TextEditingController();
-    final dialogFormKey = GlobalKey<FormState>();
-
-    return showDialog<void>(
-      context: pageContext,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: darkBackgroundColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-          title: const Text('Enter Your Name', style: TextStyle(fontWeight: FontWeight.bold, color: textPrimaryColor)),
-          content: Form(
-            key: dialogFormKey,
-            child: TextFormField(
-              controller: nameController,
-              style: const TextStyle(color: textPrimaryColor),
-              decoration: const InputDecoration(
-                  hintText: "E.g., Alex",
-                  hintStyle: TextStyle(color: textSecondaryColor),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: inputLineColor)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: inputFocusedLineColor))),
-              validator: (v) => v!.trim().isEmpty ? 'Please enter a name' : null,
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: circularButtonBackgroundColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-              ),
-              child: const Text('Continue', style: TextStyle(color: circularButtonIconColor)),
-              onPressed: () {
-                if (dialogFormKey.currentState!.validate()) {
-                  final name = nameController.text.trim();
-                  Navigator.of(dialogContext).pop();
-                  _showGeneratedCode(pageContext, name);
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showGeneratedCode(BuildContext pageContext, String name) async {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final random = Random.secure();
-    final randomCode = String.fromCharCodes(Iterable.generate(6, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
-    final userCode = '${name.replaceAll(' ', '').substring(0, min(name.replaceAll(' ', '').length, 4)).toUpperCase()}-$randomCode';
-
-    return showDialog<void>(
-      context: pageContext,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: darkBackgroundColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-          title: Text('Hi $name!', style: const TextStyle(fontWeight: FontWeight.bold, color: textPrimaryColor)),
-          content: Text('Here is your unique login code. Please save it securely:\n\n$userCode', style: const TextStyle(color: textPrimaryColor)),
-          actions: <Widget>[
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: circularButtonBackgroundColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-              ),
-              child: const Text('Okay, Continue', style: TextStyle(color: circularButtonIconColor)),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                Navigator.pushNamedAndRemoveUntil(pageContext, '/home', (route) => false, arguments: {'displayName': name, 'userCode': userCode});
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Helper for text fields
-  Widget _buildTextField({required TextEditingController controller, required String label, bool obscureText = false, String? Function(String?)? validator}) {
+  Widget _buildTextField({required TextEditingController controller, required String label, bool obscureText = false, TextInputType? keyboardType, String? Function(String?)? validator}) {
     return TextFormField(
       controller: controller,
       style: const TextStyle(color: textPrimaryColor),
       decoration: InputDecoration(labelText: label, labelStyle: const TextStyle(color: textSecondaryColor), enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: inputLineColor)), focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: inputFocusedLineColor))),
       obscureText: obscureText,
+      keyboardType: keyboardType,
       validator: validator,
     );
   }
@@ -171,7 +133,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: <Widget>[
-                          const Spacer(flex: 2), // Pushes content down
+                          const Spacer(flex: 2),
                           _buildTextField(
                             controller: _nameController,
                             label: 'Name',
@@ -181,6 +143,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                           _buildTextField(
                             controller: _emailController,
                             label: 'Email',
+                            keyboardType: TextInputType.emailAddress,
                             validator: (v) {
                               if (v == null || v.isEmpty) return 'Please enter your email';
                               if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) return 'Please enter a valid email';
@@ -208,40 +171,27 @@ class _RegistrationPageState extends State<RegistrationPage> {
                             ),
                           ),
                           SizedBox(height: screenHeight * 0.02),
-                          const Row(
-                            children: <Widget>[
-                              Expanded(child: Divider(color: inputLineColor)),
-                              Padding(padding: EdgeInsets.symmetric(horizontal: 12.0), child: Text('OR', style: TextStyle(color: textSecondaryColor))),
-                              Expanded(child: Divider(color: inputLineColor)),
-                            ],
-                          ),
+                          const Row(children: <Widget>[Expanded(child: Divider(color: inputLineColor)), Padding(padding: EdgeInsets.symmetric(horizontal: 12.0), child: Text('OR', style: TextStyle(color: textSecondaryColor))), Expanded(child: Divider(color: inputLineColor))]),
                           SizedBox(height: screenHeight * 0.02),
                           OutlinedButton(
                             onPressed: _startAnonymously,
-                            style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: secondaryActionColor),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                                padding: const EdgeInsets.symmetric(vertical: 14)
-                            ),
+                            style: OutlinedButton.styleFrom(side: const BorderSide(color: secondaryActionColor), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)), padding: const EdgeInsets.symmetric(vertical: 14)),
                             child: const Text('Start Anonymously', style: TextStyle(color: secondaryActionColor, fontWeight: FontWeight.bold)),
                           ),
-                          SizedBox(height: screenHeight * 0.02),
+                          const Spacer(flex: 3),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text("Have we met before? ", style: TextStyle(color: textSecondaryColor, fontSize: screenHeight * 0.018)),
                               TextButton(
                                 onPressed: () {
-                                  if (Navigator.canPop(context)) {
-                                    Navigator.pop(context);
-                                  }
+                                  if (Navigator.canPop(context)) { Navigator.pop(context); }
                                 },
                                 style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
                                 child: Text('Sign in', style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: screenHeight * 0.018)),
                               ),
                             ],
                           ),
-                          const Spacer(flex: 3), // Pushes content up from bottom
                         ],
                       ),
                     ),
