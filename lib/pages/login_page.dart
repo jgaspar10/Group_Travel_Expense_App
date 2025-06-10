@@ -1,5 +1,6 @@
 // lib/pages/login_page.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 
 // Dark Theme Colors
 const Color darkBackgroundColor = Color(0xFF204051);
@@ -10,7 +11,6 @@ const Color inputLineColor = Colors.white38;
 const Color inputFocusedLineColor = Colors.white;
 const Color circularButtonBackgroundColor = Colors.white;
 const Color circularButtonIconColor = darkBackgroundColor;
-const Color secondaryActionColor = Color(0xFF4AB19D); // A teal for outlined buttons/links
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -21,24 +21,58 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _nameOrEmailController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
   @override
   void dispose() {
-    _nameOrEmailController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _login() {
-    if (_formKey.currentState!.validate()) {
-      // TODO: Implement actual login logic with Firebase Auth
-      print('Name/Email: ${_nameOrEmailController.text}');
-      print('Password: ${_passwordController.text}');
+  // --- MODIFIED: _login method with Firebase Auth logic ---
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) {
+      return; // If form is not valid, do nothing
+    }
 
-      // On successful login, navigate to home and remove auth screens from stack
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+    // Show a loading indicator for better user experience
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // Sign in the user with their email and password
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      // If login is successful, navigate to the HomePage
+      // and remove all previous routes (so the user can't go back to login)
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      }
+    } on FirebaseAuthException catch (e) {
+      // Close the loading indicator before showing the error
+      if (mounted) Navigator.pop(context);
+
+      // Handle specific Firebase authentication errors
+      String errorMessage = 'An error occurred. Please try again.';
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+        errorMessage = 'No user found for that email or wrong password.';
+      } else if (e.code == 'wrong-password') {
+        errorMessage = 'Wrong password provided for that user.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage)),
+        );
+      }
     }
   }
 
@@ -57,10 +91,7 @@ class _LoginPageState extends State<LoginPage> {
               padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 20.0),
               child: Align(
                 alignment: Alignment.topCenter,
-                child: RotatedBox(
-                  quarterTurns: -1,
-                  child: Text('sign in', textAlign: TextAlign.center, style: TextStyle(color: textPrimaryColor, fontSize: screenHeight * 0.07, fontWeight: FontWeight.w900, letterSpacing: 6)),
-                ),
+                child: RotatedBox(quarterTurns: -1, child: Text('sign in', textAlign: TextAlign.center, style: TextStyle(color: textPrimaryColor, fontSize: screenHeight * 0.07, fontWeight: FontWeight.w900, letterSpacing: 6))),
               ),
             ),
             Expanded(
@@ -72,15 +103,19 @@ class _LoginPageState extends State<LoginPage> {
                     child: SizedBox(
                       height: screenHeight * 0.9,
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch, // Makes children like buttons stretch
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: <Widget>[
-                          const Spacer(flex: 2), // Pushes content down
+                          const Spacer(flex: 2),
                           TextFormField(
-                            controller: _nameOrEmailController,
+                            controller: _emailController,
                             style: const TextStyle(color: textPrimaryColor),
-                            decoration: const InputDecoration(labelText: 'Name', labelStyle: TextStyle(color: textSecondaryColor), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: inputLineColor)), focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: inputFocusedLineColor))),
-                            validator: (v) => v!.isEmpty ? 'Please enter your name or email' : null,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: const InputDecoration(labelText: 'Email', labelStyle: TextStyle(color: textSecondaryColor), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: inputLineColor)), focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: inputFocusedLineColor))),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Please enter your email';
+                              return null;
+                            },
                           ),
                           SizedBox(height: screenHeight * 0.03),
                           TextFormField(
@@ -111,9 +146,9 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                           ),
-                          SizedBox(height: screenHeight * 0.04), // Space between button and link
+                          const Spacer(),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.center, // Centered the link
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text("Your first time? ", style: TextStyle(color: textSecondaryColor, fontSize: screenHeight * 0.018)),
                               TextButton(
@@ -123,7 +158,7 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ],
                           ),
-                          const Spacer(flex: 3), // Pushes content up from bottom
+                          const Spacer(flex: 3),
                         ],
                       ),
                     ),
