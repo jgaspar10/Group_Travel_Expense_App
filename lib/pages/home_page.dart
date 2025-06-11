@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'add_trips_page.dart';
 import '../models/trip_model.dart';
 
@@ -14,14 +15,12 @@ const Color circularButtonIconColor = darkBackgroundColor;
 const Color dialogOptionColor = textPrimaryColor;
 const Color dialogIconColor = textPrimaryColor;
 const Color textSecondaryColor_50 = Colors.white54;
-const Color amountBadgeColor = Color(0xFF6A5ACD); // Color for amount badge
+const Color amountBadgeColor = Color(0xFF6A5ACD);
 const Color deleteColor = Colors.redAccent;
+const Color drawerHeaderColor = Color(0xFF2A4A5A);
 
 class HomePage extends StatefulWidget {
-  final String? displayName;
-  final String? userCode;
-
-  const HomePage({super.key, this.displayName, this.userCode});
+  const HomePage({super.key});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -105,15 +104,54 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    if (mounted) {
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       backgroundColor: darkBackgroundColor,
       appBar: AppBar(
         backgroundColor: darkBackgroundColor,
         elevation: 0,
-        automaticallyImplyLeading: false,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: textPrimaryColor),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         title: const Text('Trips', style: TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold, fontSize: 22)),
+      ),
+      drawer: Drawer(
+        backgroundColor: darkBackgroundColor,
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: <Widget>[
+            DrawerHeader(
+              decoration: const BoxDecoration(color: drawerHeaderColor),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Logged in as:', style: TextStyle(color: textSecondaryColor, fontSize: 14)),
+                  const SizedBox(height: 8),
+                  Text(user?.email ?? 'Anonymous User', style: const TextStyle(color: textPrimaryColor, fontSize: 16)),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout, color: textSecondaryColor),
+              title: const Text('Logout', style: TextStyle(color: textSecondaryColor)),
+              onTap: _logout,
+            ),
+          ],
+        ),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('trips').orderBy('createdAt', descending: true).snapshots(),
@@ -125,15 +163,15 @@ class _HomePageState extends State<HomePage> {
             return Center(child: Text('Something went wrong: ${snapshot.error}', style: const TextStyle(color: textPrimaryColor)));
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(
+            return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  Icon(Icons.luggage_outlined, size: 80, color: textSecondaryColor.withAlpha(128)),
-                  const SizedBox(height: 20),
-                  const Text('No trips yet', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimaryColor)),
-                  const SizedBox(height: 10),
-                  const Text("Tap the '+' button to add your first trip.", textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: textSecondaryColor)),
+                  Icon(Icons.luggage_outlined, size: 80, color: textSecondaryColor),
+                  SizedBox(height: 20),
+                  Text('No trips yet', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimaryColor)),
+                  SizedBox(height: 10),
+                  Text("Tap the '+' button to add your first trip.", textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: textSecondaryColor)),
                 ],
               ),
             );
@@ -164,10 +202,7 @@ class _HomePageState extends State<HomePage> {
                 },
                 child: GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => AddTripsPage(tripToEdit: trip)),
-                    );
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => AddTripsPage(tripToEdit: trip)));
                   },
                   child: TripCard(trip: trip),
                 ),
@@ -186,7 +221,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// --- THIS IS THE CORRECTED TripCard WIDGET ---
+// --- Corrected TripCard Widget ---
 class TripCard extends StatelessWidget {
   final Trip trip;
   const TripCard({super.key, required this.trip});
@@ -194,16 +229,15 @@ class TripCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Colors.transparent, // Important for the Stack to be visible
+      color: Colors.transparent,
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 8.0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.0)),
-      clipBehavior: Clip.antiAlias, // Ensures the image is clipped to the rounded corners
+      clipBehavior: Clip.antiAlias,
       child: SizedBox(
-        height: 220, // Define a fixed height for the card
+        height: 220,
         child: Stack(
           children: <Widget>[
-            // 1. Background Image
             Positioned.fill(
               child: trip.imageUrl.startsWith('http')
                   ? Image.network(
@@ -221,7 +255,6 @@ class TripCard extends StatelessWidget {
                 errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[800], child: const Center(child: Icon(Icons.broken_image, color: Colors.grey, size: 50))),
               ),
             ),
-            // 2. Gradient Overlay for text readability
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -229,12 +262,11 @@ class TripCard extends StatelessWidget {
                     colors: [Colors.transparent, Colors.black.withAlpha(180)],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    stops: const [0.5, 1.0],
+                    stops: const [0.4, 1.0], // Gradient starts lower down
                   ),
                 ),
               ),
             ),
-            // 3. Text Content and Badge
             Positioned(
               bottom: 0,
               left: 0,
@@ -245,7 +277,6 @@ class TripCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Left side text content
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,8 +290,7 @@ class TripCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // Right side amount badge
-                    const SizedBox(width: 16), // Spacing
+                    const SizedBox(width: 16),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(color: amountBadgeColor, borderRadius: BorderRadius.circular(20)),
