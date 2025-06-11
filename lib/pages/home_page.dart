@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_trips_page.dart';
 import '../models/trip_model.dart';
 
-// Color Constants
+// Your color constants...
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
 const Color textSecondaryColor = Colors.white70;
@@ -14,7 +14,8 @@ const Color circularButtonIconColor = darkBackgroundColor;
 const Color dialogOptionColor = textPrimaryColor;
 const Color dialogIconColor = textPrimaryColor;
 const Color textSecondaryColor_50 = Colors.white54;
-const Color amountBadgeColor = Color(0xFF6A5ACD);
+const Color amountBadgeColor = Color(0xFF6A5ACD); // Color for amount badge
+const Color deleteColor = Colors.redAccent;
 
 class HomePage extends StatefulWidget {
   final String? displayName;
@@ -47,8 +48,6 @@ class _HomePageState extends State<HomePage> {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const AddTripsPage()));
                 },
               ),
-
-
               const Divider(color: textSecondaryColor_50),
               ListTile(
                 leading: const Icon(Icons.qr_code_scanner, color: dialogIconColor),
@@ -66,6 +65,39 @@ class _HomePageState extends State<HomePage> {
             TextButton(
               child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
               onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteTrip(String tripId) async {
+    try {
+      await FirebaseFirestore.instance.collection('trips').doc(tripId).delete();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete trip: $e')));
+      }
+    }
+  }
+
+  Future<bool?> _showDeleteConfirmationDialog() async {
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: darkBackgroundColor,
+          title: const Text('Delete Trip?', style: TextStyle(color: textPrimaryColor)),
+          content: const Text('Are you sure you want to permanently delete this trip?', style: TextStyle(color: textSecondaryColor)),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+            ),
+            TextButton(
+              child: const Text('Delete', style: TextStyle(color: deleteColor, fontWeight: FontWeight.bold)),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
             ),
           ],
         );
@@ -107,26 +139,38 @@ class _HomePageState extends State<HomePage> {
             );
           }
 
-          final List<Trip> trips = snapshot.data!.docs.map((doc) {
-            return Trip.fromMap(doc.data() as Map<String, dynamic>);
-          }).toList();
+          final List<Trip> trips = snapshot.data!.docs.map((doc) => Trip.fromFirestore(doc)).toList();
 
           return ListView.builder(
             padding: const EdgeInsets.all(8.0),
             itemCount: trips.length,
             itemBuilder: (context, index) {
               final trip = trips[index];
-              return GestureDetector(
-                onTap: () {
-                  // Navigate to AddTripsPage and pass the trip to be edited
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AddTripsPage(tripToEdit: trip),
-                    ),
-                  );
+              return Dismissible(
+                key: Key(trip.id),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  color: deleteColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  alignment: Alignment.centerRight,
+                  child: const Icon(Icons.delete_forever, color: Colors.white),
+                ),
+                confirmDismiss: (direction) async {
+                  final bool? shouldDelete = await _showDeleteConfirmationDialog();
+                  if (shouldDelete == true) {
+                    await _deleteTrip(trip.id);
+                  }
+                  return shouldDelete;
                 },
-                child: TripCard(trip: trip),
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => AddTripsPage(tripToEdit: trip)),
+                    );
+                  },
+                  child: TripCard(trip: trip),
+                ),
               );
             },
           );
@@ -142,7 +186,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// --- TripCard Widget ---
+// --- THIS IS THE CORRECTED TripCard WIDGET ---
 class TripCard extends StatelessWidget {
   final Trip trip;
   const TripCard({super.key, required this.trip});
@@ -150,15 +194,16 @@ class TripCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Colors.transparent,
+      color: Colors.transparent, // Important for the Stack to be visible
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 8.0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.0)),
-      clipBehavior: Clip.antiAlias,
+      clipBehavior: Clip.antiAlias, // Ensures the image is clipped to the rounded corners
       child: SizedBox(
-        height: 220,
+        height: 220, // Define a fixed height for the card
         child: Stack(
           children: <Widget>[
+            // 1. Background Image
             Positioned.fill(
               child: trip.imageUrl.startsWith('http')
                   ? Image.network(
@@ -176,39 +221,53 @@ class TripCard extends StatelessWidget {
                 errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[800], child: const Center(child: Icon(Icons.broken_image, color: Colors.grey, size: 50))),
               ),
             ),
+            // 2. Gradient Overlay for text readability
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.black.withAlpha(153), Colors.transparent, Colors.black.withAlpha(153)],
+                    colors: [Colors.transparent, Colors.black.withAlpha(180)],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    stops: const [0.0, 0.5, 1.0],
+                    stops: const [0.5, 1.0],
                   ),
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: <Widget>[
-                  Text(trip.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimaryColor, shadows: [Shadow(blurRadius: 2, color: Colors.black54)])),
-                  const SizedBox(height: 4),
-                  Text(trip.location, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: textPrimaryColor, shadows: [Shadow(blurRadius: 1, color: Colors.black54)])),
-                  const SizedBox(height: 4),
-                  Text(trip.date, style: const TextStyle(fontSize: 12, color: textSecondaryColor, shadows: [Shadow(blurRadius: 1, color: Colors.black54)])),
-                ],
-              ),
-            ),
+            // 3. Text Content and Badge
             Positioned(
-              bottom: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: amountBadgeColor, borderRadius: BorderRadius.circular(20)),
-                child: Text(trip.amount, style: const TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold, fontSize: 14)),
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Left side text content
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(trip.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimaryColor, shadows: [Shadow(blurRadius: 2, color: Colors.black54)])),
+                          const SizedBox(height: 4),
+                          Text(trip.location, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: textPrimaryColor, shadows: [Shadow(blurRadius: 1, color: Colors.black54)])),
+                          const SizedBox(height: 4),
+                          Text(trip.date, style: const TextStyle(fontSize: 12, color: textSecondaryColor, shadows: [Shadow(blurRadius: 1, color: Colors.black54)])),
+                        ],
+                      ),
+                    ),
+                    // Right side amount badge
+                    const SizedBox(width: 16), // Spacing
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: amountBadgeColor, borderRadius: BorderRadius.circular(20)),
+                      child: Text(trip.amount, style: const TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

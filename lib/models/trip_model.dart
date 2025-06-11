@@ -7,8 +7,9 @@ class Trip {
   final String location;
   final String date;
   final String imageUrl;
-  // final int rating; // REMOVED
   final String amount;
+  final List<String> members;
+  final String shareCode;
 
   Trip({
     required this.id,
@@ -16,8 +17,9 @@ class Trip {
     required this.location,
     required this.date,
     required this.imageUrl,
-    // required this.rating, // REMOVED
     required this.amount,
+    required this.members,
+    required this.shareCode,
   });
 
   Map<String, dynamic> toMap() {
@@ -27,21 +29,25 @@ class Trip {
       'location': location,
       'date': date,
       'imageUrl': imageUrl,
-      // 'rating': rating, // REMOVED
       'amount': amount,
+      'members': members,
+      'shareCode': shareCode,
       'createdAt': Timestamp.now(),
     };
   }
 
-  factory Trip.fromMap(Map<String, dynamic> map) {
+  // This is the correct factory constructor that HomePage needs
+  factory Trip.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return Trip(
-      id: map['id'] ?? '',
-      title: map['title'] ?? 'No Title',
-      location: map['location'] ?? 'No Location',
-      date: map['date'] ?? '',
-      imageUrl: map['imageUrl'] ?? '',
-      // rating: map['rating'] ?? 0, // REMOVED
-      amount: map['amount'] ?? '0\$',
+      id: doc.id,
+      title: data['title'] ?? 'No Title',
+      location: data['location'] ?? 'No Location',
+      date: data['date'] ?? '',
+      imageUrl: data['imageUrl'] ?? '',
+      amount: data['amount'] ?? '0\$',
+      members: List<String>.from(data['members'] ?? []),
+      shareCode: data['shareCode'] ?? '',
     );
   }
 }

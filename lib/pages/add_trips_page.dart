@@ -1,9 +1,11 @@
 // lib/pages/add_trips_page.dart
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/trip_model.dart';
 
 // Dark Theme Colors
@@ -15,9 +17,7 @@ const Color primaryActionColor = Color(0xFF4AB19D);
 const Color primaryActionTextColor = Colors.white;
 
 class AddTripsPage extends StatefulWidget {
-  // This optional trip object determines if we are adding or editing
   final Trip? tripToEdit;
-
   const AddTripsPage({super.key, this.tripToEdit});
 
   @override
@@ -30,18 +30,18 @@ class _AddTripsPageState extends State<AddTripsPage> {
   final _descriptionController = TextEditingController();
   final _startDateController = TextEditingController();
   final _endDateController = TextEditingController();
-
   File? _tripImageFile;
+  List<String> _members = [];
 
   @override
   void initState() {
     super.initState();
-    // If a trip was passed to this widget, we are in "edit mode"
     if (widget.tripToEdit != null) {
       final trip = widget.tripToEdit!;
       _titleController.text = trip.title;
       _descriptionController.text = trip.location;
       _startDateController.text = trip.date;
+      _members = List<String>.from(trip.members);
     }
   }
 
@@ -74,8 +74,10 @@ class _AddTripsPageState extends State<AddTripsPage> {
         return Theme(
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: primaryActionColor, onPrimary: textPrimaryColor,
-              surface: darkBackgroundColor, onSurface: textPrimaryColor,
+              primary: primaryActionColor,
+              onPrimary: textPrimaryColor,
+              surface: darkBackgroundColor,
+              onSurface: textPrimaryColor,
             ),
             dialogBackgroundColor: darkBackgroundColor,
             textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: primaryActionColor)),
@@ -90,59 +92,120 @@ class _AddTripsPageState extends State<AddTripsPage> {
     }
   }
 
-  // This method now handles BOTH adding and updating
+  void _addMember() {
+    _showAddMemberDialog();
+  }
+
+  Future<void> _showAddMemberDialog() async {
+    final nameController = TextEditingController();
+    final dialogFormKey = GlobalKey<FormState>();
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: darkBackgroundColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+          title: const Text('Add Member', style: TextStyle(color: textPrimaryColor)),
+          content: Form(
+            key: dialogFormKey,
+            child: TextFormField(
+              controller: nameController,
+              autofocus: true,
+              style: const TextStyle(color: textPrimaryColor),
+              decoration: const InputDecoration(
+                hintText: "Enter member's name",
+                hintStyle: TextStyle(color: textSecondaryColor),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter a name.';
+                }
+                return null;
+              },
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: primaryActionColor),
+              child: const Text('Add', style: TextStyle(color: primaryActionTextColor)),
+              onPressed: () {
+                if (dialogFormKey.currentState!.validate()) {
+                  setState(() {
+                    _members.add(nameController.text.trim());
+                  });
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _saveTrip() async {
-    if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saving trip...')));
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-      // Note: Image uploading to Firebase Storage will be the next step.
-      // For now, if we edit, we keep the old image URL unless a new one is picked.
-      String imageUrl = widget.tripToEdit?.imageUrl ?? 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=60';
-      if (_tripImageFile != null) {
-        // In the future, this is where we would upload the file and get a new URL.
-        // For now, we'll just store the local path for display purposes.
-        imageUrl = _tripImageFile!.path;
-      }
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You must be logged in.')));
+      return;
+    }
 
-      try {
-        // Create a map of the data from the form controllers
-        final tripData = Trip(
-          id: widget.tripToEdit?.id ?? '',
+    if (!_members.contains(user.uid)) {
+      _members.insert(0, user.uid);
+    }
+
+    String imageUrl = widget.tripToEdit?.imageUrl ?? 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=60';
+    if (_tripImageFile != null) {
+      // TODO: Implement actual image upload to Firebase Storage and get URL
+      imageUrl = _tripImageFile!.path; // This is a local path, will be replaced later
+    }
+
+    try {
+      if (widget.tripToEdit == null) {
+        // ADDING A NEW TRIP
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        final random = Random.secure();
+        final String shareCode = String.fromCharCodes(Iterable.generate(6, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
+
+        final newTrip = Trip(
+          id: '',
           title: _titleController.text,
           location: _descriptionController.text,
           date: _startDateController.text,
           imageUrl: imageUrl,
-          amount: widget.tripToEdit?.amount ?? "0\$",
-        ).toMap();
+          amount: "0\$",
+          members: _members,
+          shareCode: shareCode,
+        );
 
-        if (widget.tripToEdit == null) {
-          // --- ADDING A NEW TRIP ---
-          DocumentReference docRef = await FirebaseFirestore.instance.collection('trips').add(tripData);
-          await docRef.update({'id': docRef.id}); // Save the generated ID back to the document
-        } else {
-          // --- UPDATING AN EXISTING TRIP ---
-          // Use the ID of the trip we are editing to update the correct document
-          await FirebaseFirestore.instance.collection('trips').doc(widget.tripToEdit!.id).update(tripData);
-        }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).removeCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Trip saved successfully!')));
-
-          // This will now take you back to the HomePage after adding OR editing
-          Navigator.of(context).pop();
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save trip: $e')));
-        }
+        DocumentReference docRef = await FirebaseFirestore.instance.collection('trips').add(newTrip.toMap());
+        await docRef.update({'id': docRef.id});
+      } else {
+        // UPDATING AN EXISTING TRIP
+        final updatedData = {
+          'title': _titleController.text,
+          'location': _descriptionController.text,
+          'date': _startDateController.text,
+          'imageUrl': imageUrl,
+          'members': _members,
+        };
+        await FirebaseFirestore.instance.collection('trips').doc(widget.tripToEdit!.id).update(updatedData);
       }
-    }
-  }
 
-  void _addMember() {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add Member functionality (TODO)')));
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save trip: $e')));
+      }
     }
   }
 
@@ -176,7 +239,6 @@ class _AddTripsPageState extends State<AddTripsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // This boolean checks if we are editing or adding a new trip
     final bool isEditing = widget.tripToEdit != null;
 
     return Scaffold(
@@ -188,11 +250,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
           icon: const Icon(Icons.arrow_back, color: textPrimaryColor),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        // The title is now dynamic
-        title: Text(
-          isEditing ? 'Edit Trip' : 'Add Trip',
-          style: const TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold),
-        ),
+        title: Text(isEditing ? 'Edit Trip' : 'Add Trip', style: const TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -201,7 +259,6 @@ class _AddTripsPageState extends State<AddTripsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              // This logic now also shows the existing image when editing
               GestureDetector(
                 onTap: _pickImage,
                 child: Container(
@@ -211,7 +268,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
                     borderRadius: BorderRadius.circular(12.0),
                     image: _tripImageFile != null
                         ? DecorationImage(image: FileImage(_tripImageFile!), fit: BoxFit.cover)
-                        : (isEditing && widget.tripToEdit!.imageUrl.startsWith('http'))
+                        : (isEditing && widget.tripToEdit!.imageUrl.isNotEmpty && widget.tripToEdit!.imageUrl.startsWith('http'))
                         ? DecorationImage(image: NetworkImage(widget.tripToEdit!.imageUrl), fit: BoxFit.cover)
                         : null,
                   ),
@@ -230,17 +287,9 @@ class _AddTripsPageState extends State<AddTripsPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              _buildTextField(
-                controller: _titleController,
-                label: 'Trip Title',
-                validator: (value) => value!.isEmpty ? 'Please enter a trip title' : null,
-              ),
+              _buildTextField(controller: _titleController, label: 'Trip Title', validator: (value) => value!.isEmpty ? 'Please enter a trip title' : null),
               const SizedBox(height: 16),
-              _buildTextField(
-                controller: _descriptionController,
-                label: 'Trip Description',
-                multiLine: true,
-              ),
+              _buildTextField(controller: _descriptionController, label: 'Trip Description', multiLine: true),
               const SizedBox(height: 16),
               Row(
                 children: <Widget>[
@@ -249,7 +298,27 @@ class _AddTripsPageState extends State<AddTripsPage> {
                   Expanded(child: _buildTextField(controller: _endDateController, label: 'Trip End Date', readOnly: true, onTap: () => _selectDate(context, _endDateController), validator: (value) => value!.isEmpty ? 'Select end date' : null, suffixIcon: IconButton(icon: const Icon(Icons.calendar_today_outlined, color: textSecondaryColor), onPressed: () => _selectDate(context, _endDateController)))),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              if (_members.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(12.0),
+                  decoration: BoxDecoration(color: inputFieldFillColor, borderRadius: BorderRadius.circular(8.0)),
+                  child: Wrap(
+                    spacing: 8.0,
+                    runSpacing: 4.0,
+                    children: _members.map((member) => Chip(
+                      label: Text(member, style: const TextStyle(color: textPrimaryColor)),
+                      backgroundColor: darkBackgroundColor,
+                      onDeleted: () {
+                        setState(() {
+                          _members.remove(member);
+                        });
+                      },
+                      deleteIconColor: textSecondaryColor,
+                    )).toList(),
+                  ),
+                ),
+              const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
                 decoration: BoxDecoration(color: inputFieldFillColor, borderRadius: BorderRadius.circular(8.0)),
@@ -269,11 +338,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
                     textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 onPressed: _saveTrip,
-                // The button text is now dynamic
-                child: Text(
-                  isEditing ? 'Save Changes' : 'Add',
-                  style: const TextStyle(color: primaryActionTextColor),
-                ),
+                child: Text(isEditing ? 'Save Changes' : 'Add', style: const TextStyle(color: primaryActionTextColor)),
               ),
               const SizedBox(height: 16),
             ],
