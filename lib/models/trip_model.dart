@@ -8,7 +8,8 @@ class Trip {
   final String date;
   final String imageUrl;
   final String amount;
-  final List<String> members;
+  final List<String> members; // Stores UIDs of confirmed members
+  final List<String> invitedEmails; // ADDED: Stores emails of invited users
   final String shareCode;
 
   Trip({
@@ -19,6 +20,7 @@ class Trip {
     required this.imageUrl,
     required this.amount,
     required this.members,
+    required this.invitedEmails, // ADDED
     required this.shareCode,
   });
 
@@ -31,12 +33,12 @@ class Trip {
       'imageUrl': imageUrl,
       'amount': amount,
       'members': members,
+      'invitedEmails': invitedEmails, // ADDED
       'shareCode': shareCode,
       'createdAt': Timestamp.now(),
     };
   }
 
-  // This is the correct factory constructor that HomePage needs
   factory Trip.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return Trip(
@@ -46,7 +48,9 @@ class Trip {
       date: data['date'] ?? '',
       imageUrl: data['imageUrl'] ?? '',
       amount: data['amount'] ?? '0\$',
+      // Read the list of member UIDs from the database
       members: List<String>.from(data['members'] ?? []),
+      invitedEmails: List<String>.from(data['invitedEmails'] ?? []), // ADDED
       shareCode: data['shareCode'] ?? '',
     );
   }
