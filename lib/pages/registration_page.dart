@@ -1,9 +1,9 @@
 // lib/pages/registration_page.dart
 import 'package:flutter/material.dart';
-import 'dart:math';
-import 'home_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Dark Theme Colors
+// Your color constants...
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
 const Color textSecondaryColor = Colors.white70;
@@ -12,7 +12,6 @@ const Color inputLineColor = Colors.white38;
 const Color inputFocusedLineColor = Colors.white;
 const Color circularButtonBackgroundColor = Colors.white;
 const Color circularButtonIconColor = darkBackgroundColor;
-const Color secondaryActionColor = Color(0xFF4AB19D); // A teal for "Start Anonymously"
 
 class RegistrationPage extends StatefulWidget {
   const RegistrationPage({super.key});
@@ -35,108 +34,39 @@ class _RegistrationPageState extends State<RegistrationPage> {
     super.dispose();
   }
 
-  void _register() {
-    if (_formKey.currentState!.validate()) {
-      // TODO: Implement actual registration logic with Firebase Auth
-      print('Registering user...');
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) { return; }
+
+    showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator()));
+
+    try {
+      final UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      if (userCredential.user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'uid': userCredential.user!.uid,
+        });
+
+        if (mounted) Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? 'An unknown error occurred.')));
     }
   }
 
-  void _startAnonymously() {
-    _showNameInputDialog(context);
-  }
-
-  Future<void> _showNameInputDialog(BuildContext pageContext) async {
-    final nameController = TextEditingController();
-    final dialogFormKey = GlobalKey<FormState>();
-
-    return showDialog<void>(
-      context: pageContext,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: darkBackgroundColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-          title: const Text('Enter Your Name', style: TextStyle(fontWeight: FontWeight.bold, color: textPrimaryColor)),
-          content: Form(
-            key: dialogFormKey,
-            child: TextFormField(
-              controller: nameController,
-              style: const TextStyle(color: textPrimaryColor),
-              decoration: const InputDecoration(
-                  hintText: "E.g., Alex",
-                  hintStyle: TextStyle(color: textSecondaryColor),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: inputLineColor)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: inputFocusedLineColor))),
-              validator: (v) => v!.trim().isEmpty ? 'Please enter a name' : null,
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: circularButtonBackgroundColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-              ),
-              child: const Text('Continue', style: TextStyle(color: circularButtonIconColor)),
-              onPressed: () {
-                if (dialogFormKey.currentState!.validate()) {
-                  final name = nameController.text.trim();
-                  Navigator.of(dialogContext).pop();
-                  _showGeneratedCode(pageContext, name);
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showGeneratedCode(BuildContext pageContext, String name) async {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final random = Random.secure();
-    final randomCode = String.fromCharCodes(Iterable.generate(6, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
-    final userCode = '${name.replaceAll(' ', '').substring(0, min(name.replaceAll(' ', '').length, 4)).toUpperCase()}-$randomCode';
-
-    return showDialog<void>(
-      context: pageContext,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: darkBackgroundColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-          title: Text('Hi $name!', style: const TextStyle(fontWeight: FontWeight.bold, color: textPrimaryColor)),
-          content: Text('Here is your unique login code. Please save it securely:\n\n$userCode', style: const TextStyle(color: textPrimaryColor)),
-          actions: <Widget>[
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: circularButtonBackgroundColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-              ),
-              child: const Text('Okay, Continue', style: TextStyle(color: circularButtonIconColor)),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                Navigator.pushNamedAndRemoveUntil(pageContext, '/home', (route) => false, arguments: {'displayName': name, 'userCode': userCode});
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Helper for text fields
-  Widget _buildTextField({required TextEditingController controller, required String label, bool obscureText = false, String? Function(String?)? validator}) {
+  Widget _buildTextField({required TextEditingController controller, required String label, bool obscureText = false, TextInputType? keyboardType, String? Function(String?)? validator}) {
     return TextFormField(
       controller: controller,
       style: const TextStyle(color: textPrimaryColor),
       decoration: InputDecoration(labelText: label, labelStyle: const TextStyle(color: textSecondaryColor), enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: inputLineColor)), focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: inputFocusedLineColor))),
       obscureText: obscureText,
+      keyboardType: keyboardType,
       validator: validator,
     );
   }
@@ -161,90 +91,74 @@ class _RegistrationPageState extends State<RegistrationPage> {
             ),
             Expanded(
               child: SingleChildScrollView(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(screenWidth * 0.05, screenHeight * 0.04, screenWidth * 0.08, screenHeight * 0.02),
-                  child: Form(
-                    key: _formKey,
-                    child: SizedBox(
-                      height: screenHeight * 0.9,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                padding: EdgeInsets.fromLTRB(screenWidth * 0.05, screenHeight * 0.05, screenWidth * 0.08, screenHeight * 0.02),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      SizedBox(height: screenHeight * 0.03),
+                      _buildTextField(
+                        controller: _nameController,
+                        label: 'Name',
+                        validator: (v) => v!.isEmpty ? 'Please enter your name' : null,
+                      ),
+                      SizedBox(height: screenHeight * 0.03),
+                      _buildTextField(
+                        controller: _emailController,
+                        label: 'Email',
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (v) => v!.isEmpty || !v.contains('@') ? 'Please enter a valid email' : null,
+                      ),
+                      SizedBox(height: screenHeight * 0.03),
+                      _buildTextField(
+                        controller: _passwordController,
+                        label: 'Password',
+                        obscureText: true,
+                        validator: (v) => v!.length < 6 ? 'Password must be at least 6 characters' : null,
+                      ),
+                      SizedBox(height: screenHeight * 0.05), // Adjusted spacing to match login page
+
+                      // --- MODIFIED BUTTON ---
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: InkWell(
+                          onTap: _register,
+                          borderRadius: BorderRadius.circular(30),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                            decoration: BoxDecoration(color: circularButtonBackgroundColor, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withAlpha(26), blurRadius: 10, offset: const Offset(0, 5))]),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('Sign Up', style: TextStyle(color: circularButtonIconColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                                SizedBox(width: 8),
+                                Icon(Icons.arrow_forward, color: circularButtonIconColor, size: 20)
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: screenHeight * 0.04),
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: <Widget>[
-                          const Spacer(flex: 2), // Pushes content down
-                          _buildTextField(
-                            controller: _nameController,
-                            label: 'Name',
-                            validator: (v) => v!.isEmpty ? 'Please enter your name' : null,
-                          ),
-                          SizedBox(height: screenHeight * 0.025),
-                          _buildTextField(
-                            controller: _emailController,
-                            label: 'Email',
-                            validator: (v) {
-                              if (v == null || v.isEmpty) return 'Please enter your email';
-                              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) return 'Please enter a valid email';
-                              return null;
+                        children: [
+                          Text("Have we met before? ", style: TextStyle(color: textSecondaryColor, fontSize: screenHeight * 0.018)),
+                          TextButton(
+                            onPressed: () {
+                              if (Navigator.canPop(context)) {
+                                Navigator.pop(context);
+                              } else {
+                                Navigator.pushReplacementNamed(context, '/login');
+                              }
                             },
+                            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                            child: Text('Sign in', style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: screenHeight * 0.018)),
                           ),
-                          SizedBox(height: screenHeight * 0.025),
-                          _buildTextField(
-                            controller: _passwordController,
-                            label: 'Password',
-                            obscureText: true,
-                            validator: (v) => v!.length < 6 ? 'Password must be at least 6 characters' : null,
-                          ),
-                          SizedBox(height: screenHeight * 0.05),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: InkWell(
-                              onTap: _register,
-                              borderRadius: BorderRadius.circular(30),
-                              child: Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: const BoxDecoration(color: circularButtonBackgroundColor, shape: BoxShape.circle),
-                                child: const Icon(Icons.arrow_forward, color: circularButtonIconColor),
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: screenHeight * 0.02),
-                          const Row(
-                            children: <Widget>[
-                              Expanded(child: Divider(color: inputLineColor)),
-                              Padding(padding: EdgeInsets.symmetric(horizontal: 12.0), child: Text('OR', style: TextStyle(color: textSecondaryColor))),
-                              Expanded(child: Divider(color: inputLineColor)),
-                            ],
-                          ),
-                          SizedBox(height: screenHeight * 0.02),
-                          OutlinedButton(
-                            onPressed: _startAnonymously,
-                            style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: secondaryActionColor),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                                padding: const EdgeInsets.symmetric(vertical: 14)
-                            ),
-                            child: const Text('Start Anonymously', style: TextStyle(color: secondaryActionColor, fontWeight: FontWeight.bold)),
-                          ),
-                          SizedBox(height: screenHeight * 0.02),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text("Have we met before? ", style: TextStyle(color: textSecondaryColor, fontSize: screenHeight * 0.018)),
-                              TextButton(
-                                onPressed: () {
-                                  if (Navigator.canPop(context)) {
-                                    Navigator.pop(context);
-                                  }
-                                },
-                                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
-                                child: Text('Sign in', style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: screenHeight * 0.018)),
-                              ),
-                            ],
-                          ),
-                          const Spacer(flex: 3), // Pushes content up from bottom
                         ],
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ),

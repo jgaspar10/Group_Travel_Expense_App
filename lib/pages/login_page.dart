@@ -171,11 +171,11 @@ class _LoginPageState extends State<LoginPage> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
                             decoration: BoxDecoration(color: circularButtonBackgroundColor, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withAlpha(26), blurRadius: 10, offset: const Offset(0, 5))]),
-                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Text('Ok', style: TextStyle(color: circularButtonIconColor, fontWeight: FontWeight.bold, fontSize: 16)), SizedBox(width: 8), Icon(Icons.arrow_forward, color: circularButtonIconColor, size: 20)]),
+                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Text('Sign In', style: TextStyle(color: circularButtonIconColor, fontWeight: FontWeight.bold, fontSize: 16)), SizedBox(width: 8), Icon(Icons.arrow_forward, color: circularButtonIconColor, size: 20)]),
                           ),
                         ),
                       ),
-                      SizedBox(height: screenHeight * 0.1),
+                      SizedBox(height: screenHeight * 0.04),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
