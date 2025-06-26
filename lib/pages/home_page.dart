@@ -4,20 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_trips_page.dart';
-import '../models/trip_model.dart';
+import '../models/trip_model.dart'; // Ensure this path is correct
 
-// Your color constants...
+// Your existing color constants...
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
 const Color textSecondaryColor = Colors.white70;
-const Color circularButtonBackgroundColor = Colors.white;
-const Color circularButtonIconColor = darkBackgroundColor;
-const Color dialogOptionColor = textPrimaryColor;
-const Color dialogIconColor = textPrimaryColor;
-const Color textSecondaryColor_50 = Colors.white54;
-const Color amountBadgeColor = Color(0xFF6A5ACD);
-const Color deleteColor = Colors.redAccent;
-const Color drawerHeaderColor = Color(0xFF2A4A5A);
+const Color primaryActionColor = Color(0xFF4AB19D); // Using this as the selected/accent color
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -26,88 +19,30 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  int _bottomNavIndex = 1; // Default to 'Trips' tab
 
-  Future<void> _showAddOptionsDialog(BuildContext context) async {
-    return showDialog<void>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: darkBackgroundColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-          title: const Text('New Group Options', style: TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.group_add_outlined, color: dialogIconColor),
-                title: const Text('Create new group', style: TextStyle(color: dialogOptionColor)),
-                onTap: () {
-                  Navigator.of(dialogContext).pop();
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const AddTripsPage()));
-                },
-              ),
-              const Divider(color: textSecondaryColor_50),
-              ListTile(
-                leading: const Icon(Icons.qr_code_scanner, color: dialogIconColor),
-                title: const Text('Join a group with code', style: TextStyle(color: dialogOptionColor)),
-                onTap: () {
-                  Navigator.of(dialogContext).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Join a group selected (TODO)')),
-                  );
-                },
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-          ],
-        );
-      },
-    );
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
   }
 
-  Future<void> _deleteTrip(String tripId) async {
-    try {
-      await FirebaseFirestore.instance.collection('trips').doc(tripId).delete();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete trip: $e')));
-      }
-    }
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
-  Future<bool?> _showDeleteConfirmationDialog() async {
-    return showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: darkBackgroundColor,
-          title: const Text('Delete Trip?', style: TextStyle(color: textPrimaryColor)),
-          content: const Text('Are you sure you want to permanently delete this trip?', style: TextStyle(color: textSecondaryColor)),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-            ),
-            TextButton(
-              child: const Text('Delete', style: TextStyle(color: deleteColor, fontWeight: FontWeight.bold)),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _logout() async {
-    await FirebaseAuth.instance.signOut();
-    if (mounted) {
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+  void _onBottomNavItemTapped(int index) {
+    if (index == 2) { // The center '+' button
+      Navigator.push(context, MaterialPageRoute(builder: (context) => const AddTripsPage()));
+    } else {
+      setState(() {
+        _bottomNavIndex = index;
+      });
+      // TODO: Handle navigation to other main pages (Home, Expenses, Profile)
     }
   }
 
@@ -118,189 +53,189 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: darkBackgroundColor,
       appBar: AppBar(
-        backgroundColor: darkBackgroundColor,
+        automaticallyImplyLeading: false, // Removes back button
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: textPrimaryColor),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+        title: const Text('Your Trips', style: TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold, fontSize: 28)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add, color: primaryActionColor, size: 30),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const AddTripsPage()));
+            },
           ),
-        ),
-        title: const Text('Trips', style: TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold, fontSize: 22)),
+        ],
       ),
-      drawer: Drawer(
-        backgroundColor: darkBackgroundColor,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: <Widget>[
-            DrawerHeader(
-              decoration: const BoxDecoration(color: drawerHeaderColor),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Column(
+          children: [
+            TabBar(
+              controller: _tabController,
+              labelColor: textPrimaryColor,
+              unselectedLabelColor: textSecondaryColor,
+              indicatorColor: primaryActionColor,
+              indicatorWeight: 3.0,
+              tabs: const [
+                Tab(text: "Active"),
+                Tab(text: "Upcoming"),
+                Tab(text: "Past"),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
                 children: [
-                  const Text('Logged in as:', style: TextStyle(color: textSecondaryColor, fontSize: 14)),
-                  const SizedBox(height: 8),
-                  Text(user?.email ?? 'Anonymous User', style: const TextStyle(color: textPrimaryColor, fontSize: 16)),
+                  // Each tab will build a list. For now, they all show the same list.
+                  _buildTripsList(user), // Active Trips
+                  _buildTripsList(user), // Upcoming Trips (placeholder)
+                  _buildTripsList(user), // Past Trips (placeholder)
                 ],
               ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout, color: textSecondaryColor),
-              title: const Text('Logout', style: TextStyle(color: textSecondaryColor)),
-              onTap: _logout,
             ),
           ],
         ),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('trips').orderBy('createdAt', descending: true).snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Something went wrong: ${snapshot.error}', style: const TextStyle(color: textPrimaryColor)));
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Icon(Icons.luggage_outlined, size: 80, color: textSecondaryColor),
-                  SizedBox(height: 20),
-                  Text('No trips yet', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimaryColor)),
-                  SizedBox(height: 10),
-                  Text("Tap the '+' button to add your first trip.", textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: textSecondaryColor)),
-                ],
-              ),
-            );
-          }
-
-          final List<Trip> trips = snapshot.data!.docs.map((doc) => Trip.fromFirestore(doc)).toList();
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(8.0),
-            itemCount: trips.length,
-            itemBuilder: (context, index) {
-              final trip = trips[index];
-              return Dismissible(
-                key: Key(trip.id),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  color: deleteColor,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  alignment: Alignment.centerRight,
-                  child: const Icon(Icons.delete_forever, color: Colors.white),
-                ),
-                confirmDismiss: (direction) async {
-                  final bool? shouldDelete = await _showDeleteConfirmationDialog();
-                  if (shouldDelete == true) {
-                    await _deleteTrip(trip.id);
-                  }
-                  return shouldDelete;
-                },
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => AddTripsPage(tripToEdit: trip)));
-                  },
-                  child: TripCard(trip: trip),
-                ),
-              );
-            },
-          );
-        },
+      bottomNavigationBar: BottomAppBar(
+        color: darkBackgroundColor.withBlue(60), // A slightly different shade for the bar
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 6.0,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: <Widget>[
+            IconButton(icon: Icon(Icons.home, color: _bottomNavIndex == 0 ? primaryActionColor : textSecondaryColor), onPressed: () => _onBottomNavItemTapped(0)),
+            IconButton(icon: Icon(Icons.card_travel, color: _bottomNavIndex == 1 ? primaryActionColor : textSecondaryColor), onPressed: () => _onBottomNavItemTapped(1)),
+            const SizedBox(width: 40), // Placeholder for the FAB notch
+            IconButton(icon: Icon(Icons.receipt_long, color: _bottomNavIndex == 3 ? primaryActionColor : textSecondaryColor), onPressed: () => _onBottomNavItemTapped(3)),
+            IconButton(icon: Icon(Icons.person, color: _bottomNavIndex == 4 ? primaryActionColor : textSecondaryColor), onPressed: () => _onBottomNavItemTapped(4)),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddOptionsDialog(context),
-        backgroundColor: circularButtonBackgroundColor,
-        foregroundColor: circularButtonIconColor,
-        child: const Icon(Icons.add, size: 30),
+        onPressed: () => _onBottomNavItemTapped(2),
+        backgroundColor: primaryActionColor,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+
+  Widget _buildTripsList(User? user) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('trips')
+          .where('members', arrayContains: user?.uid)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Something went wrong', style: const TextStyle(color: textSecondaryColor)));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                "You have no trips in this category.\nTap '+' to create one!",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: textSecondaryColor, fontSize: 18),
+              ),
+            ),
+          );
+        }
+
+        final List<Trip> trips = snapshot.data!.docs.map((doc) => Trip.fromFirestore(doc)).toList();
+
+        return ListView.builder(
+          padding: const EdgeInsets.only(top: 20.0),
+          itemCount: trips.length,
+          itemBuilder: (context, index) {
+            return NewTripCard(trip: trips[index]);
+          },
+        );
+      },
     );
   }
 }
 
-// --- Corrected TripCard Widget ---
-class TripCard extends StatelessWidget {
+// --- NEW Redesigned Trip Card Widget ---
+class NewTripCard extends StatelessWidget {
   final Trip trip;
-  const TripCard({super.key, required this.trip});
+  const NewTripCard({super.key, required this.trip});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: Colors.transparent,
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 8.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.0)),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        height: 220,
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(
-              child: trip.imageUrl.startsWith('http')
-                  ? Image.network(
-                trip.imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[800], child: const Center(child: Icon(Icons.broken_image, color: Colors.grey, size: 50))),
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Center(child: CircularProgressIndicator(value: loadingProgress.expectedTotalBytes != null ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! : null, strokeWidth: 2, color: textPrimaryColor));
-                },
-              )
-                  : Image.file(
-                File(trip.imageUrl),
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[800], child: const Center(child: Icon(Icons.broken_image, color: Colors.grey, size: 50))),
-              ),
+    return GestureDetector(
+      onTap: () {
+        // TODO: Navigate to the new Trip Overview page
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Tapped on ${trip.title}')),
+        );
+      },
+      child: Container(
+        height: 150,
+        margin: const EdgeInsets.only(bottom: 20.0),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15.0),
+          image: DecorationImage(
+            image: NetworkImage(trip.imageUrl),
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Colors.black.withOpacity(0.3), // Dark overlay for text contrast
+              BlendMode.darken,
             ),
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.transparent, Colors.black.withAlpha(180)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: const [0.4, 1.0], // Gradient starts lower down
-                  ),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(
+                trip.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Text(trip.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimaryColor, shadows: [Shadow(blurRadius: 2, color: Colors.black54)])),
-                          const SizedBox(height: 4),
-                          Text(trip.location, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: textPrimaryColor, shadows: [Shadow(blurRadius: 1, color: Colors.black54)])),
-                          const SizedBox(height: 4),
-                          Text(trip.date, style: const TextStyle(fontSize: 12, color: textSecondaryColor, shadows: [Shadow(blurRadius: 1, color: Colors.black54)])),
-                        ],
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on, color: Colors.white70, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        trip.location,
+                        style: const TextStyle(color: Colors.white70, fontSize: 14),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: amountBadgeColor, borderRadius: BorderRadius.circular(20)),
-                      child: Text(trip.amount, style: const TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold, fontSize: 14)),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      const Icon(Icons.group, color: Colors.white70, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        trip.members.length.toString(),
+                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                "Date: ${trip.date}",
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
+          ),
         ),
       ),
     );
