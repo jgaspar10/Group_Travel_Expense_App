@@ -1,16 +1,18 @@
 // lib/pages/home_page.dart
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_trips_page.dart';
-import '../models/trip_model.dart'; // Ensure this path is correct
+import 'trip_overview_page.dart'; // Import the new overview page
+import '../models/trip_model.dart';
 
-// Your existing color constants...
+// Your color constants...
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
 const Color textSecondaryColor = Colors.white70;
-const Color primaryActionColor = Color(0xFF4AB19D); // Using this as the selected/accent color
+const Color primaryActionColor = Color(0xFF4AB19D);
+const Color bottomNavIconColor = Colors.white;
+const Color bottomNavSelectedIconColor = Color(0xFF4AB19D);
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,7 +23,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  int _bottomNavIndex = 1; // Default to 'Trips' tab
+  int _bottomNavIndex = 1;
 
   @override
   void initState() {
@@ -36,13 +38,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   }
 
   void _onBottomNavItemTapped(int index) {
-    if (index == 2) { // The center '+' button
+    if (index == 2) {
       Navigator.push(context, MaterialPageRoute(builder: (context) => const AddTripsPage()));
     } else {
-      setState(() {
-        _bottomNavIndex = index;
-      });
-      // TODO: Handle navigation to other main pages (Home, Expenses, Profile)
+      setState(() { _bottomNavIndex = index; });
+      // TODO: Handle navigation to other main pages
     }
   }
 
@@ -53,16 +53,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     return Scaffold(
       backgroundColor: darkBackgroundColor,
       appBar: AppBar(
-        automaticallyImplyLeading: false, // Removes back button
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text('Your Trips', style: TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold, fontSize: 28)),
         actions: [
           IconButton(
             icon: const Icon(Icons.add, color: primaryActionColor, size: 30),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const AddTripsPage()));
-            },
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AddTripsPage())),
           ),
         ],
       ),
@@ -76,20 +74,15 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               unselectedLabelColor: textSecondaryColor,
               indicatorColor: primaryActionColor,
               indicatorWeight: 3.0,
-              tabs: const [
-                Tab(text: "Active"),
-                Tab(text: "Upcoming"),
-                Tab(text: "Past"),
-              ],
+              tabs: const [Tab(text: "Active"), Tab(text: "Upcoming"), Tab(text: "Past")],
             ),
             Expanded(
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // Each tab will build a list. For now, they all show the same list.
-                  _buildTripsList(user), // Active Trips
-                  _buildTripsList(user), // Upcoming Trips (placeholder)
-                  _buildTripsList(user), // Past Trips (placeholder)
+                  _buildTripsList(user),
+                  const Center(child: Text('Upcoming trips will be shown here.', style: TextStyle(color: textSecondaryColor))),
+                  const Center(child: Text('Past trips will be shown here.', style: TextStyle(color: textSecondaryColor))),
                 ],
               ),
             ),
@@ -97,17 +90,17 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         ),
       ),
       bottomNavigationBar: BottomAppBar(
-        color: darkBackgroundColor.withBlue(60), // A slightly different shade for the bar
+        color: darkBackgroundColor.withBlue(60),
         shape: const CircularNotchedRectangle(),
-        notchMargin: 6.0,
+        notchMargin: 8.0,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: <Widget>[
-            IconButton(icon: Icon(Icons.home, color: _bottomNavIndex == 0 ? primaryActionColor : textSecondaryColor), onPressed: () => _onBottomNavItemTapped(0)),
-            IconButton(icon: Icon(Icons.card_travel, color: _bottomNavIndex == 1 ? primaryActionColor : textSecondaryColor), onPressed: () => _onBottomNavItemTapped(1)),
-            const SizedBox(width: 40), // Placeholder for the FAB notch
-            IconButton(icon: Icon(Icons.receipt_long, color: _bottomNavIndex == 3 ? primaryActionColor : textSecondaryColor), onPressed: () => _onBottomNavItemTapped(3)),
-            IconButton(icon: Icon(Icons.person, color: _bottomNavIndex == 4 ? primaryActionColor : textSecondaryColor), onPressed: () => _onBottomNavItemTapped(4)),
+            IconButton(icon: Icon(Icons.home, color: _bottomNavIndex == 0 ? primaryActionColor : bottomNavIconColor), onPressed: () => _onBottomNavItemTapped(0)),
+            IconButton(icon: Icon(Icons.card_travel, color: _bottomNavIndex == 1 ? primaryActionColor : bottomNavIconColor), onPressed: () => _onBottomNavItemTapped(1)),
+            const SizedBox(width: 40),
+            IconButton(icon: Icon(Icons.receipt_long, color: _bottomNavIndex == 3 ? primaryActionColor : bottomNavIconColor), onPressed: () => _onBottomNavItemTapped(3)),
+            IconButton(icon: Icon(Icons.person, color: _bottomNavIndex == 4 ? primaryActionColor : bottomNavIconColor), onPressed: () => _onBottomNavItemTapped(4)),
           ],
         ),
       ),
@@ -122,33 +115,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   Widget _buildTripsList(User? user) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('trips')
-          .where('members', arrayContains: user?.uid)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('trips').where('members', arrayContains: user?.uid).orderBy('createdAt', descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Something went wrong', style: const TextStyle(color: textSecondaryColor)));
-        }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                "You have no trips in this category.\nTap '+' to create one!",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: textSecondaryColor, fontSize: 18),
-              ),
-            ),
-          );
+          return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: Text("You have no active trips.\nTap '+' to create one!", textAlign: TextAlign.center, style: TextStyle(color: textSecondaryColor, fontSize: 18))));
         }
-
         final List<Trip> trips = snapshot.data!.docs.map((doc) => Trip.fromFirestore(doc)).toList();
-
         return ListView.builder(
           padding: const EdgeInsets.only(top: 20.0),
           itemCount: trips.length,
@@ -161,7 +133,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   }
 }
 
-// --- NEW Redesigned Trip Card Widget ---
 class NewTripCard extends StatelessWidget {
   final Trip trip;
   const NewTripCard({super.key, required this.trip});
@@ -169,70 +140,55 @@ class NewTripCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      // --- MODIFIED: onTap now navigates to TripOverviewPage ---
       onTap: () {
-        // TODO: Navigate to the new Trip Overview page
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Tapped on ${trip.title}')),
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => TripOverviewPage(trip: trip)),
         );
       },
       child: Container(
         height: 150,
         margin: const EdgeInsets.only(bottom: 20.0),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15.0),
-          image: DecorationImage(
-            image: NetworkImage(trip.imageUrl),
-            fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(
-              Colors.black.withOpacity(0.3), // Dark overlay for text contrast
-              BlendMode.darken,
-            ),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.end,
+        child: Hero( // Wrap with Hero for smooth animation
+          tag: 'trip_image_${trip.id}',
+          child: Stack(
             children: [
-              Text(
-                trip.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(15.0),
+                  child: Image.network(trip.imageUrl, fit: BoxFit.cover),
                 ),
               ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on, color: Colors.white70, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        trip.location,
-                        style: const TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                    ],
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15.0),
+                    gradient: LinearGradient(colors: [Colors.black.withOpacity(0.6), Colors.transparent], begin: Alignment.centerLeft, end: Alignment.centerRight, stops: const [0.0, 0.8]),
                   ),
-                  Row(
-                    children: [
-                      const Icon(Icons.group, color: Colors.white70, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        trip.members.length.toString(),
-                        style: const TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                "Date: ${trip.date}",
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              Positioned(
+                top: 20,
+                left: 20,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(trip.title, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Row(children: [const Icon(Icons.location_on, color: Colors.white, size: 16), const SizedBox(width: 4), Text(trip.location, style: const TextStyle(color: Colors.white, fontSize: 14))]),
+                  ],
+                ),
+              ),
+              Positioned(
+                bottom: 20,
+                left: 20,
+                child: Text(trip.date, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              ),
+              Positioned(
+                bottom: 20,
+                right: 20,
+                child: Row(children: [const Icon(Icons.group, color: Colors.white, size: 16), const SizedBox(width: 4), Text(trip.members.length.toString(), style: const TextStyle(color: Colors.white, fontSize: 14))]),
               ),
             ],
           ),
