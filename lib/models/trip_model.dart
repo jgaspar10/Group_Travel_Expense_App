@@ -8,9 +8,10 @@ class Trip {
   final String date;
   final String imageUrl;
   final String amount;
-  final List<String> members; // Stores UIDs of confirmed members
-  final List<String> invitedEmails; // ADDED: Stores emails of invited users
+  final List<String> members;
+  final List<String> invitedEmails;
   final String shareCode;
+  final double budget; // ADDED: To store the trip's budget
 
   Trip({
     required this.id,
@@ -20,8 +21,9 @@ class Trip {
     required this.imageUrl,
     required this.amount,
     required this.members,
-    required this.invitedEmails, // ADDED
+    required this.invitedEmails,
     required this.shareCode,
+    required this.budget, // ADDED
   });
 
   Map<String, dynamic> toMap() {
@@ -33,8 +35,9 @@ class Trip {
       'imageUrl': imageUrl,
       'amount': amount,
       'members': members,
-      'invitedEmails': invitedEmails, // ADDED
+      'invitedEmails': invitedEmails,
       'shareCode': shareCode,
+      'budget': budget, // ADDED
       'createdAt': Timestamp.now(),
     };
   }
@@ -48,10 +51,10 @@ class Trip {
       date: data['date'] ?? '',
       imageUrl: data['imageUrl'] ?? '',
       amount: data['amount'] ?? '0\$',
-      // Read the list of member UIDs from the database
       members: List<String>.from(data['members'] ?? []),
-      invitedEmails: List<String>.from(data['invitedEmails'] ?? []), // ADDED
+      invitedEmails: List<String>.from(data['invitedEmails'] ?? []),
       shareCode: data['shareCode'] ?? '',
+      budget: (data['budget'] ?? 0.0).toDouble(), // ADDED
     );
   }
 }

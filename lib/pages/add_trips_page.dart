@@ -31,7 +31,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
   final _descriptionController = TextEditingController();
   final _startDateController = TextEditingController();
   final _endDateController = TextEditingController();
-
+  final _budgetController = TextEditingController(); // ADDED: Controller for budget
   File? _tripImageFile;
   Map<String, String> _membersInfo = {};
   List<String> _invitedEmails = [];
@@ -44,6 +44,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
       _titleController.text = trip.title;
       _descriptionController.text = trip.location;
       _startDateController.text = trip.date;
+      _budgetController.text = trip.budget.toStringAsFixed(2); // ADDED: Pre-fill budget
       _invitedEmails = List<String>.from(trip.invitedEmails);
       if (trip.members.isNotEmpty) {
         _fetchMemberInfo(trip.members);
@@ -75,6 +76,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
     _descriptionController.dispose();
     _startDateController.dispose();
     _endDateController.dispose();
+    _budgetController.dispose(); // ADDED: Dispose new controller
     super.dispose();
   }
 
@@ -82,9 +84,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
     final ImagePicker picker = ImagePicker();
     final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      setState(() {
-        _tripImageFile = File(pickedFile.path);
-      });
+      setState(() { _tripImageFile = File(pickedFile.path); });
     }
   }
 
@@ -111,9 +111,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
     }
   }
 
-  void _addMember() {
-    _showAddMemberByEmailDialog();
-  }
+  void _addMember() { _showAddMemberByEmailDialog(); }
 
   Future<void> _showAddMemberByEmailDialog() async {
     final emailController = TextEditingController();
@@ -126,30 +124,16 @@ class _AddTripsPageState extends State<AddTripsPage> {
           backgroundColor: darkBackgroundColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
           title: const Text('Add Member by Email', style: TextStyle(color: textPrimaryColor)),
-          content: Form(
-            key: dialogFormKey,
-            child: TextFormField(
-              controller: emailController,
-              autofocus: true,
-              style: const TextStyle(color: textPrimaryColor),
-              decoration: const InputDecoration(hintText: "Enter member's email", hintStyle: TextStyle(color: textSecondaryColor)),
-              validator: (value) => (value == null || !value.contains('@')) ? 'Please enter a valid email.' : null,
-            ),
-          ),
+          content: Form(key: dialogFormKey, child: TextFormField(controller: emailController, autofocus: true, style: const TextStyle(color: textPrimaryColor), decoration: const InputDecoration(hintText: "Enter member's email", hintStyle: TextStyle(color: textSecondaryColor)), validator: (value) => (value == null || !value.contains('@')) ? 'Please enter a valid email.' : null)),
           actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
+            TextButton(child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)), onPressed: () => Navigator.of(dialogContext).pop()),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: primaryActionColor),
               child: const Text('Add', style: TextStyle(color: primaryActionTextColor)),
               onPressed: () async {
                 if (dialogFormKey.currentState!.validate()) {
                   final email = emailController.text.trim();
-
                   final querySnapshot = await FirebaseFirestore.instance.collection('users').where('email', isEqualTo: email).limit(1).get();
-
                   if (mounted) {
                     if (querySnapshot.docs.isNotEmpty) {
                       final userDoc = querySnapshot.docs.first;
@@ -178,17 +162,12 @@ class _AddTripsPageState extends State<AddTripsPage> {
             title: const Text('User Not Found', style: TextStyle(color: textPrimaryColor)),
             content: Text('No user exists with the email "$email". Would you like to send them an email invitation to join this trip?', style: const TextStyle(color: textSecondaryColor)),
             actions: [
-              TextButton(
-                child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
-                onPressed: () => Navigator.of(dialogContext).pop(),
-              ),
+              TextButton(child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)), onPressed: () => Navigator.of(dialogContext).pop()),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: primaryActionColor),
                 child: const Text('Send Invite', style: TextStyle(color: primaryActionTextColor)),
                 onPressed: () {
-                  setState(() {
-                    if (!_invitedEmails.contains(email)) { _invitedEmails.add(email); }
-                  });
+                  setState(() { if (!_invitedEmails.contains(email)) { _invitedEmails.add(email); } });
                   _sendInviteEmail(email);
                   Navigator.of(dialogContext).pop();
                 },
@@ -200,24 +179,12 @@ class _AddTripsPageState extends State<AddTripsPage> {
 
   Future<void> _sendInviteEmail(String email) async {
     final shareCode = widget.tripToEdit?.shareCode ?? String.fromCharCodes(Iterable.generate(6, (_) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.codeUnitAt(Random.secure().nextInt(36))));
-
     final tripTitle = _titleController.text.isNotEmpty ? _titleController.text : "an upcoming trip";
-
-    final String subject = 'You\'ve been invited to join the trip "$tripTitle"!';
-    final String body = 'Hello!\n\nYou have been invited to join "$tripTitle".\n\nPlease sign up for our app and use the code below to join the group:\n\nShare Code: $shareCode\n\nThanks!';
-
-    final Uri emailLaunchUri = Uri(
-      scheme: 'mailto',
-      path: email,
-      query: 'subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(body)}',
-    );
-
+    final Uri emailLaunchUri = Uri(scheme: 'mailto', path: email, query: 'subject=${Uri.encodeComponent('You\'ve been invited to join "$tripTitle"!')}&body=${Uri.encodeComponent('Hello!\n\nYou have been invited to join "$tripTitle".\n\nPlease sign up for our app and use the code below to join the group:\n\nShare Code: $shareCode\n\nThanks!')}');
     try {
       if (await canLaunchUrl(emailLaunchUri)) {
         await launchUrl(emailLaunchUri);
-      } else {
-        throw 'Could not launch $emailLaunchUri';
-      }
+      } else { throw 'Could not launch email app'; }
     } catch (e) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not launch email app: $e')));
     }
@@ -228,7 +195,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
 
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You must be logged in.')));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You must be logged in.')));
       return;
     }
 
@@ -237,26 +204,30 @@ class _AddTripsPageState extends State<AddTripsPage> {
     }
 
     final List<String> memberUIDs = _membersInfo.keys.toList();
-
     String imageUrl = widget.tripToEdit?.imageUrl ?? 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=60';
     if (_tripImageFile != null) { /* TODO: Image upload logic */ imageUrl = _tripImageFile!.path; }
 
     try {
-      final String shareCode = widget.tripToEdit?.shareCode ?? String.fromCharCodes(Iterable.generate(6, (_) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.codeUnitAt(Random.secure().nextInt(36))));
+      final shareCode = widget.tripToEdit?.shareCode ?? String.fromCharCodes(Iterable.generate(6, (_) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.codeUnitAt(Random.secure().nextInt(36))));
+
+      final newTrip = Trip(
+        id: widget.tripToEdit?.id ?? '',
+        title: _titleController.text,
+        location: _descriptionController.text,
+        date: _startDateController.text,
+        imageUrl: imageUrl,
+        amount: widget.tripToEdit?.amount ?? "0\$",
+        members: memberUIDs,
+        invitedEmails: _invitedEmails,
+        shareCode: shareCode,
+        budget: double.tryParse(_budgetController.text) ?? 0.0, // ADDED
+      );
 
       if (widget.tripToEdit == null) {
-        final newTrip = Trip(
-          id: '', title: _titleController.text, location: _descriptionController.text, date: _startDateController.text,
-          imageUrl: imageUrl, amount: "0\$", members: memberUIDs, invitedEmails: _invitedEmails, shareCode: shareCode,
-        );
         DocumentReference docRef = await FirebaseFirestore.instance.collection('trips').add(newTrip.toMap());
         await docRef.update({'id': docRef.id});
       } else {
-        final updatedData = {
-          'title': _titleController.text, 'location': _descriptionController.text, 'date': _startDateController.text,
-          'imageUrl': imageUrl, 'members': memberUIDs, 'invitedEmails': _invitedEmails,
-        };
-        await FirebaseFirestore.instance.collection('trips').doc(widget.tripToEdit!.id).update(updatedData);
+        await FirebaseFirestore.instance.collection('trips').doc(widget.tripToEdit!.id).update(newTrip.toMap());
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -272,13 +243,14 @@ class _AddTripsPageState extends State<AddTripsPage> {
     VoidCallback? onTap,
     bool readOnly = false,
     Widget? suffixIcon,
+    TextInputType? keyboardType,
   }) {
     return TextFormField(
       controller: controller,
       style: const TextStyle(color: textPrimaryColor),
       maxLines: multiLine ? 3 : 1,
       readOnly: readOnly,
-      keyboardType: multiLine ? TextInputType.multiline : TextInputType.text,
+      keyboardType: keyboardType ?? (multiLine ? TextInputType.multiline : TextInputType.text),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: textSecondaryColor),
@@ -315,6 +287,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              // Image Picker
               GestureDetector(
                 onTap: _pickImage,
                 child: Container(
@@ -343,10 +316,27 @@ class _AddTripsPageState extends State<AddTripsPage> {
                 ),
               ),
               const SizedBox(height: 24),
+
+              // Title and Description
               _buildTextField(controller: _titleController, label: 'Trip Title', validator: (value) => value!.isEmpty ? 'Please enter a trip title' : null),
               const SizedBox(height: 16),
               _buildTextField(controller: _descriptionController, label: 'Trip Description', multiLine: true),
               const SizedBox(height: 16),
+
+              // --- ADDED: Budget Text Field ---
+              _buildTextField(
+                controller: _budgetController,
+                label: 'Trip Budget (\$)',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'Please enter a budget';
+                  if (double.tryParse(value) == null) return 'Please enter a valid number';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Date Fields
               Row(
                 children: <Widget>[
                   Expanded(child: _buildTextField(controller: _startDateController, label: 'Trip Start Date', readOnly: true, onTap: () => _selectDate(context, _startDateController), validator: (value) => value!.isEmpty ? 'Select start date' : null, suffixIcon: IconButton(icon: const Icon(Icons.calendar_today_outlined, color: textSecondaryColor), onPressed: () => _selectDate(context, _startDateController)))),
@@ -355,6 +345,8 @@ class _AddTripsPageState extends State<AddTripsPage> {
                 ],
               ),
               const SizedBox(height: 16),
+
+              // Members display
               if (_membersInfo.isNotEmpty || _invitedEmails.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.all(12.0),
@@ -363,23 +355,14 @@ class _AddTripsPageState extends State<AddTripsPage> {
                     spacing: 8.0,
                     runSpacing: 4.0,
                     children: [
-                      ..._membersInfo.entries.map((entry) => Chip(
-                        label: Text(entry.value, style: const TextStyle(color: textPrimaryColor)),
-                        backgroundColor: darkBackgroundColor,
-                        onDeleted: () => setState(() => _membersInfo.remove(entry.key)),
-                        deleteIconColor: textSecondaryColor,
-                      )),
-                      ..._invitedEmails.map((email) => Chip(
-                        label: Text(email, style: const TextStyle(color: textSecondaryColor)),
-                        avatar: const Icon(Icons.mail_outline, size: 16, color: textSecondaryColor),
-                        backgroundColor: darkBackgroundColor,
-                        onDeleted: () => setState(() => _invitedEmails.remove(email)),
-                        deleteIconColor: textSecondaryColor,
-                      )),
+                      ..._membersInfo.entries.map((entry) => Chip(label: Text(entry.value, style: const TextStyle(color: textPrimaryColor)), backgroundColor: darkBackgroundColor, onDeleted: () => setState(() => _membersInfo.remove(entry.key)), deleteIconColor: textSecondaryColor)),
+                      ..._invitedEmails.map((email) => Chip(label: Text(email, style: const TextStyle(color: textSecondaryColor)), avatar: const Icon(Icons.mail_outline, size: 16, color: textSecondaryColor), backgroundColor: darkBackgroundColor, onDeleted: () => setState(() => _invitedEmails.remove(email)), deleteIconColor: textSecondaryColor)),
                     ],
                   ),
                 ),
               const SizedBox(height: 16),
+
+              // Add Member button
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
                 decoration: BoxDecoration(color: inputFieldFillColor, borderRadius: BorderRadius.circular(8.0)),
@@ -392,6 +375,8 @@ class _AddTripsPageState extends State<AddTripsPage> {
                 ),
               ),
               const SizedBox(height: 32),
+
+              // Save button
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                     backgroundColor: primaryActionColor,

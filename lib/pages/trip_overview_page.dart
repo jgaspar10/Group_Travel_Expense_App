@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../models/trip_model.dart';
 import '../models/expense_model.dart';
+import '../models/plan_model.dart';
 import 'add_trips_page.dart';
 
 // Your existing color constants from other files
@@ -17,7 +18,6 @@ const Color actionButtonColor = Color(0xFF5856D6);
 
 class TripOverviewPage extends StatefulWidget {
   final Trip trip;
-
   const TripOverviewPage({super.key, required this.trip});
 
   @override
@@ -32,7 +32,12 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() => setState(() {})); // Rebuild on tab change to update FAB
+    // This listener rebuilds the page when the tab changes, which allows us to update the FAB.
+    _tabController.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     _fetchMemberNames();
   }
 
@@ -156,6 +161,99 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
     }
   }
 
+  void _showAddPlanDialog() {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    DateTime? selectedDate;
+    TimeOfDay? selectedTime;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                backgroundColor: darkBackgroundColor,
+                title: const Text('Add New Plan', style: TextStyle(color: textPrimaryColor)),
+                content: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(controller: titleController, style: const TextStyle(color: textPrimaryColor), decoration: const InputDecoration(labelText: 'Title', labelStyle: TextStyle(color: textSecondaryColor)), validator: (val) => val!.isEmpty ? 'Enter a title' : null),
+                      TextFormField(controller: descriptionController, style: const TextStyle(color: textPrimaryColor), decoration: const InputDecoration(labelText: 'Description', labelStyle: TextStyle(color: textSecondaryColor))),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          TextButton.icon(
+                            icon: const Icon(Icons.calendar_today, color: primaryActionColor),
+                            label: Text(selectedDate == null ? 'Select Date' : DateFormat.yMd().format(selectedDate!), style: const TextStyle(color: primaryActionColor)),
+                            onPressed: () async {
+                              final pickedDate = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2101));
+                              if (pickedDate != null) {
+                                setDialogState(() => selectedDate = pickedDate);
+                              }
+                            },
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.access_time, color: primaryActionColor),
+                            label: Text(selectedTime == null ? 'Select Time' : selectedTime!.format(context), style: const TextStyle(color: primaryActionColor)),
+                            onPressed: () async {
+                              final pickedTime = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+                              if (pickedTime != null) {
+                                setDialogState(() => selectedTime = pickedTime);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: textSecondaryColor))),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: primaryActionColor),
+                    onPressed: () {
+                      if (formKey.currentState!.validate()) {
+                        if (selectedDate == null || selectedTime == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a date and time for the plan.')));
+                          return;
+                        }
+                        final planDateTime = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, selectedTime!.hour, selectedTime!.minute);
+
+                        _savePlan(title: titleController.text.trim(), description: descriptionController.text.trim(), time: Timestamp.fromDate(planDateTime));
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: const Text('Save', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              );
+            }
+        );
+      },
+    );
+  }
+
+  Future<void> _savePlan({required String title, required String description, required Timestamp time}) async {
+    final newPlan = Plan(
+      id: '',
+      title: title,
+      description: description,
+      time: time,
+      createdAt: Timestamp.now(),
+    );
+
+    try {
+      await FirebaseFirestore.instance.collection('trips').doc(widget.trip.id).collection('plans').add(newPlan.toMap());
+    } catch (e) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add plan: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -170,9 +268,7 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
               iconTheme: const IconThemeData(color: textPrimaryColor),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => AddTripsPage(tripToEdit: widget.trip)));
-                  },
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AddTripsPage(tripToEdit: widget.trip))),
                   style: TextButton.styleFrom(backgroundColor: Colors.black.withOpacity(0.3), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   child: const Text('Edit', style: TextStyle(color: textPrimaryColor)),
                 ),
@@ -210,7 +306,8 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
           ? FloatingActionButton(
         onPressed: _tabController.index == 1 ? _showAddPlanDialog : _showAddExpenseDialog,
         backgroundColor: actionButtonColor,
-        child: const Icon(Icons.add, color: Colors.white),
+        tooltip: _tabController.index == 1 ? 'Add Plan' : 'Add Expense',
+        child: Icon(_tabController.index == 1 ? Icons.event_note : Icons.add, color: Colors.white),
       )
           : null,
     );
@@ -218,22 +315,11 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
 
   Widget _buildExpensesList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('trips')
-          .doc(widget.trip.id)
-          .collection('expenses')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('trips').doc(widget.trip.id).collection('expenses').orderBy('createdAt', descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: textPrimaryColor)));
-        }
-        if (snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('No expenses added yet.', style: TextStyle(color: textSecondaryColor)));
-        }
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: textPrimaryColor)));
+        if (snapshot.data!.docs.isEmpty) return const Center(child: Text('No expenses added yet.', style: TextStyle(color: textSecondaryColor)));
 
         final expenses = snapshot.data!.docs.map((doc) => Expense.fromFirestore(doc)).toList();
 
@@ -261,21 +347,47 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
   }
 
   Widget _buildPlansList() {
-    // This is a placeholder for now
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.edit_calendar, size: 60, color: textSecondaryColor),
-          const SizedBox(height: 16),
-          const Text('No plans added yet.', style: TextStyle(color: textSecondaryColor)),
-        ],
-      ),
-    );
-  }
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('trips').doc(widget.trip.id).collection('plans').orderBy('time').snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.data!.docs.isEmpty) {
+          return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.edit_calendar, size: 60, color: textSecondaryColor), const SizedBox(height: 16), const Text('No plans added yet.', style: TextStyle(color: textSecondaryColor))]));
+        }
 
-  void _showAddPlanDialog() {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add Plan dialog (TODO)')));
+        final plans = snapshot.data!.docs.map((doc) => Plan.fromFirestore(doc)).toList();
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          itemCount: plans.length,
+          itemBuilder: (context, index) {
+            final plan = plans[index];
+            return Container(
+              padding: const EdgeInsets.all(16.0),
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(color: inputFieldFillColor, borderRadius: BorderRadius.circular(12.0)),
+              child: Row(
+                children: [
+                  const Icon(Icons.timer_outlined, color: textSecondaryColor, size: 28),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(DateFormat.jm().format(plan.time.toDate()), style: const TextStyle(color: textPrimaryColor)),
+                        Text(plan.title, style: const TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                        if(plan.description.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4.0), child: Text(plan.description, style: const TextStyle(color: textSecondaryColor))),
+                      ],
+                    ),
+                  ),
+                  TextButton(onPressed: (){}, child: const Text('Edit', style: TextStyle(color: primaryActionColor))),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildOverviewTab() {
@@ -292,10 +404,7 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
               const SizedBox(height: 8),
               const Text('Spent: \$0 of \$0', style: TextStyle(color: textSecondaryColor)),
               const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: LinearProgressIndicator(value: 0.0, backgroundColor: textSecondaryColor.withOpacity(0.3), valueColor: const AlwaysStoppedAnimation<Color>(primaryActionColor), minHeight: 8),
-              ),
+              ClipRRect(borderRadius: BorderRadius.circular(10), child: LinearProgressIndicator(value: 0.0, backgroundColor: textSecondaryColor.withOpacity(0.3), valueColor: const AlwaysStoppedAnimation<Color>(primaryActionColor), minHeight: 8)),
             ],
           ),
         ),
