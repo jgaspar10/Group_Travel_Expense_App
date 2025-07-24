@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_trips_page.dart';
-import 'trip_overview_page.dart'; // Import the new overview page
+import 'trip_overview_page.dart';
 import '../models/trip_model.dart';
 
 // Your color constants...
@@ -82,6 +82,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 children: [
                   _buildTripsList(user),
                   const Center(child: Text('Upcoming trips will be shown here.', style: TextStyle(color: textSecondaryColor))),
+                  // THIS IS THE CORRECTED LINE
                   const Center(child: Text('Past trips will be shown here.', style: TextStyle(color: textSecondaryColor))),
                 ],
               ),
@@ -114,13 +115,51 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   }
 
   Widget _buildTripsList(User? user) {
+    if (user == null) {
+      return const Center(
+        child: Text(
+          "Please log in to see your trips.",
+          style: TextStyle(color: textSecondaryColor, fontSize: 18),
+        ),
+      );
+    }
+
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('trips').where('members', arrayContains: user?.uid).orderBy('createdAt', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('trips')
+          .where('members', arrayContains: user.uid)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: Text("You have no active trips.\nTap '+' to create one!", textAlign: TextAlign.center, style: TextStyle(color: textSecondaryColor, fontSize: 18))));
+        if (snapshot.hasError) {
+          print('Firestore Error: ${snapshot.error}');
+          return const Center(
+            child: Text(
+              'Something went wrong!',
+              style: TextStyle(color: Colors.redAccent, fontSize: 18),
+            ),
+          );
         }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: primaryActionColor));
+        }
+
+        if (snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                "You have no active trips.\nTap '+' to create one!",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: textSecondaryColor, fontSize: 18),
+              ),
+            ),
+          );
+        }
+
         final List<Trip> trips = snapshot.data!.docs.map((doc) => Trip.fromFirestore(doc)).toList();
+
         return ListView.builder(
           padding: const EdgeInsets.only(top: 20.0),
           itemCount: trips.length,
@@ -140,7 +179,6 @@ class NewTripCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      // --- MODIFIED: onTap now navigates to TripOverviewPage ---
       onTap: () {
         Navigator.push(
           context,
@@ -150,7 +188,7 @@ class NewTripCard extends StatelessWidget {
       child: Container(
         height: 150,
         margin: const EdgeInsets.only(bottom: 20.0),
-        child: Hero( // Wrap with Hero for smooth animation
+        child: Hero(
           tag: 'trip_image_${trip.id}',
           child: Stack(
             children: [

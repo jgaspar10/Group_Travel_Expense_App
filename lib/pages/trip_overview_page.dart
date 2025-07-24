@@ -32,7 +32,6 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    // This listener rebuilds the page when the tab changes, which allows us to update the FAB.
     _tabController.addListener(() {
       if (mounted) {
         setState(() {});
@@ -266,7 +265,13 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
               pinned: true,
               backgroundColor: darkBackgroundColor,
               iconTheme: const IconThemeData(color: textPrimaryColor),
+              // --- MODIFIED: ADDED DELETE BUTTON ---
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                  onPressed: _showDeleteConfirmationDialog,
+                  tooltip: 'Delete Trip',
+                ),
                 TextButton(
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AddTripsPage(tripToEdit: widget.trip))),
                   style: TextButton.styleFrom(backgroundColor: Colors.black.withOpacity(0.3), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
@@ -426,5 +431,76 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
         ),
       ],
     );
+  }
+
+  // --- NEW: FUNCTION TO SHOW DELETE CONFIRMATION ---
+  Future<void> _showDeleteConfirmationDialog() async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // User must tap button!
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: darkBackgroundColor,
+          title: const Text('Delete Trip?', style: TextStyle(color: textPrimaryColor)),
+          content: const SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text('This action is permanent and cannot be undone.', style: TextStyle(color: textSecondaryColor)),
+                Text('All associated plans and expenses will also be deleted.', style: TextStyle(color: textSecondaryColor)),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              style: TextButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text('Delete', style: TextStyle(color: textPrimaryColor)),
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog
+                _deleteTrip(); // Then call the delete function
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- NEW: FUNCTION TO DELETE TRIP AND ALL ITS SUBCOLLECTIONS ---
+  Future<void> _deleteTrip() async {
+    try {
+      final tripRef = FirebaseFirestore.instance.collection('trips').doc(widget.trip.id);
+
+      // Delete all documents in the 'expenses' subcollection
+      final expenses = await tripRef.collection('expenses').get();
+      for (final doc in expenses.docs) {
+        await doc.reference.delete();
+      }
+
+      // Delete all documents in the 'plans' subcollection
+      final plans = await tripRef.collection('plans').get();
+      for (final doc in plans.docs) {
+        await doc.reference.delete();
+      }
+
+      // Finally, delete the trip document itself
+      await tripRef.delete();
+
+      if (mounted) {
+        // Pop the overview page to return to the home page
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete trip: $e')),
+        );
+      }
+    }
   }
 }
