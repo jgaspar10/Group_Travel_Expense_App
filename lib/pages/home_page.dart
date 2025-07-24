@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_trips_page.dart';
 import 'trip_overview_page.dart';
+import 'profile_page.dart'; // Keep this import
 import '../models/trip_model.dart';
 
 // Your color constants...
@@ -40,9 +41,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void _onBottomNavItemTapped(int index) {
     if (index == 2) {
       Navigator.push(context, MaterialPageRoute(builder: (context) => const AddTripsPage()));
+    } else if (index == 4) {
+      Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilePage()));
     } else {
       setState(() { _bottomNavIndex = index; });
-      // TODO: Handle navigation to other main pages
+      // TODO: Handle navigation to other main pages (Home, Receipts)
     }
   }
 
@@ -77,12 +80,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               tabs: const [Tab(text: "Active"), Tab(text: "Upcoming"), Tab(text: "Past")],
             ),
             Expanded(
+              // --- REVERTED to original TabBarView structure ---
               child: TabBarView(
                 controller: _tabController,
                 children: [
                   _buildTripsList(user),
                   const Center(child: Text('Upcoming trips will be shown here.', style: TextStyle(color: textSecondaryColor))),
-                  // THIS IS THE CORRECTED LINE
                   const Center(child: Text('Past trips will be shown here.', style: TextStyle(color: textSecondaryColor))),
                 ],
               ),
@@ -114,52 +117,24 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
   }
 
+  // --- REVERTED to the original _buildTripsList function ---
   Widget _buildTripsList(User? user) {
     if (user == null) {
-      return const Center(
-        child: Text(
-          "Please log in to see your trips.",
-          style: TextStyle(color: textSecondaryColor, fontSize: 18),
-        ),
-      );
+      return const Center(child: Text("Please log in to see your trips.", style: TextStyle(color: textSecondaryColor, fontSize: 18)));
     }
-
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('trips')
-          .where('members', arrayContains: user.uid)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('trips').where('members', arrayContains: user.uid).orderBy('createdAt', descending: true).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          print('Firestore Error: ${snapshot.error}');
-          return const Center(
-            child: Text(
-              'Something went wrong!',
-              style: TextStyle(color: Colors.redAccent, fontSize: 18),
-            ),
-          );
+          return const Center(child: Text('Something went wrong!', style: TextStyle(color: Colors.redAccent)));
         }
-
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: primaryActionColor));
         }
-
-        if (snapshot.data!.docs.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                "You have no active trips.\nTap '+' to create one!",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: textSecondaryColor, fontSize: 18),
-              ),
-            ),
-          );
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: Text("You have no active trips.\nTap '+' to create one!", textAlign: TextAlign.center, style: TextStyle(color: textSecondaryColor, fontSize: 18))));
         }
-
         final List<Trip> trips = snapshot.data!.docs.map((doc) => Trip.fromFirestore(doc)).toList();
-
         return ListView.builder(
           padding: const EdgeInsets.only(top: 20.0),
           itemCount: trips.length,
@@ -218,6 +193,7 @@ class NewTripCard extends StatelessWidget {
                   ],
                 ),
               ),
+              // --- REVERTED to using the original trip.date field ---
               Positioned(
                 bottom: 20,
                 left: 20,
