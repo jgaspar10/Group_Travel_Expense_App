@@ -50,6 +50,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           'name': _nameController.text.trim(),
           'email': _emailController.text.trim(),
           'uid': userCredential.user!.uid,
+          'currency': 'GBP', // CHANGED: Default currency is now GBP
         });
 
         if (mounted) Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
@@ -118,9 +119,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         obscureText: true,
                         validator: (v) => v!.length < 6 ? 'Password must be at least 6 characters' : null,
                       ),
-                      SizedBox(height: screenHeight * 0.05), // Adjusted spacing to match login page
+                      SizedBox(height: screenHeight * 0.05),
 
-                      // --- MODIFIED BUTTON ---
                       Align(
                         alignment: Alignment.centerRight,
                         child: InkWell(

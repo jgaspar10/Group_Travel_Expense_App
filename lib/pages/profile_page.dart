@@ -21,6 +21,14 @@ class _ProfilePageState extends State<ProfilePage> {
   String _userEmail = 'Loading...';
   bool _isLoading = true;
 
+  String? _selectedCurrency;
+  final Map<String, String> _currencies = {
+    'USD': '\$',
+    'EUR': '€',
+    'GBP': '£',
+    'JPY': '¥',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +48,7 @@ class _ProfilePageState extends State<ProfilePage> {
             setState(() {
               _userName = userDoc.get('name');
               _userEmail = userDoc.get('email');
+              _selectedCurrency = userDoc.get('currency') ?? 'GBP'; // CHANGED: Fallback currency is now GBP
               _isLoading = false;
             });
           }
@@ -57,6 +66,29 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _updateCurrency(String? newCurrency) async {
+    if (newCurrency == null || currentUser == null) return;
+
+    setState(() {
+      _selectedCurrency = newCurrency;
+    });
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser!.uid)
+          .update({'currency': newCurrency});
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Currency updated!')),
+        );
+      }
+    } catch (e) {
+      print("Error updating currency: $e");
+    }
+  }
+
   Future<void> _signOut() async {
     await FirebaseAuth.instance.signOut();
     if (mounted) {
@@ -66,7 +98,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    // --- MODIFIED: Removed Scaffold and AppBar. Now returns the body directly. ---
     return _isLoading
         ? const Center(child: CircularProgressIndicator(color: primaryActionColor))
         : Center(
@@ -97,6 +128,29 @@ class _ProfilePageState extends State<ProfilePage> {
                 color: textSecondaryColor,
                 fontSize: 16,
               ),
+            ),
+            const SizedBox(height: 40),
+            DropdownButtonFormField<String>(
+              value: _selectedCurrency,
+              items: _currencies.keys.map((String key) {
+                return DropdownMenuItem<String>(
+                  value: key,
+                  child: Text('$key (${_currencies[key]})'),
+                );
+              }).toList(),
+              onChanged: _updateCurrency,
+              decoration: InputDecoration(
+                labelText: 'Default Currency',
+                labelStyle: const TextStyle(color: textSecondaryColor),
+                filled: true,
+                fillColor: const Color(0xFF2A4A5A),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              dropdownColor: const Color(0xFF2A4A5A),
+              style: const TextStyle(color: textPrimaryColor),
             ),
             const Spacer(),
             ElevatedButton.icon(

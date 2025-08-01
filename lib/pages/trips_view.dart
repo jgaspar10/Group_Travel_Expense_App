@@ -2,10 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import 'trip_overview_page.dart';
 import '../models/trip_model.dart';
 
-// Your color constants...
 const Color textPrimaryColor = Colors.white;
 const Color textSecondaryColor = Colors.white70;
 const Color primaryActionColor = Color(0xFF4AB19D);
@@ -95,6 +95,10 @@ class NewTripCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // --- THIS SECTION IS NOW CORRECTED ---
+    final String startDate = DateFormat('d MMM y').format(trip.startDate.toDate());
+    final String endDate = DateFormat('d MMM y').format(trip.endDate.toDate());
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -138,7 +142,8 @@ class NewTripCard extends StatelessWidget {
               Positioned(
                 bottom: 20,
                 left: 20,
-                child: Text(trip.date, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                // --- THIS LINE IS THE FIX ---
+                child: Text('$startDate - $endDate', style: const TextStyle(color: Colors.white70, fontSize: 12)),
               ),
               Positioned(
                 bottom: 20,

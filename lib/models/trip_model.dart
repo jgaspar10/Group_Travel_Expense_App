@@ -5,27 +5,27 @@ class Trip {
   final String id;
   final String title;
   final String location;
-  final String date;
+  final Timestamp startDate;
+  final Timestamp endDate;
   final String imageUrl;
-  final String amount;
   final List<String> members;
   final List<String> invitedEmails;
   final String shareCode;
   final double budget;
-  final Timestamp createdAt; // ADDED THIS LINE
+  final Timestamp createdAt;
 
   Trip({
     required this.id,
     required this.title,
     required this.location,
-    required this.date,
+    required this.startDate,
+    required this.endDate,
     required this.imageUrl,
-    required this.amount,
     required this.members,
     required this.invitedEmails,
     required this.shareCode,
     required this.budget,
-    required this.createdAt, // ADDED THIS LINE
+    required this.createdAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -33,14 +33,14 @@ class Trip {
       'id': id,
       'title': title,
       'location': location,
-      'date': date,
+      'startDate': startDate,
+      'endDate': endDate,
       'imageUrl': imageUrl,
-      'amount': amount,
       'members': members,
       'invitedEmails': invitedEmails,
       'shareCode': shareCode,
       'budget': budget,
-      'createdAt': Timestamp.now(),
+      'createdAt': createdAt,
     };
   }
 
@@ -50,14 +50,14 @@ class Trip {
       id: doc.id,
       title: data['title'] ?? 'No Title',
       location: data['location'] ?? 'No Location',
-      date: data['date'] ?? '',
+      startDate: data['startDate'] ?? Timestamp.now(),
+      endDate: data['endDate'] ?? Timestamp.now(),
       imageUrl: data['imageUrl'] ?? '',
-      amount: data['amount'] ?? '0\$',
       members: List<String>.from(data['members'] ?? []),
       invitedEmails: List<String>.from(data['invitedEmails'] ?? []),
       shareCode: data['shareCode'] ?? '',
       budget: (data['budget'] ?? 0.0).toDouble(),
-      createdAt: data['createdAt'] ?? Timestamp.now(), // ADDED THIS LINE
+      createdAt: data['createdAt'] ?? Timestamp.now(),
     );
   }
 }
