@@ -28,11 +28,9 @@ class _AddTripsPageState extends State<AddTripsPage> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _startDateController = TextEditingController();
-  final _endDateController = TextEditingController();
+  final _dateController = TextEditingController();
   final _budgetController = TextEditingController();
-  DateTime? _startDate;
-  DateTime? _endDate;
+
   File? _tripImageFile;
   Map<String, String> _membersInfo = {};
   List<String> _invitedEmails = [];
@@ -44,8 +42,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
       final trip = widget.tripToEdit!;
       _titleController.text = trip.title;
       _descriptionController.text = trip.location;
-      // Note: Reverted to the simple 'date' string for now
-      _startDateController.text = trip.date;
+      _dateController.text = trip.date;
       _budgetController.text = trip.budget.toStringAsFixed(2);
       _invitedEmails = List<String>.from(trip.invitedEmails);
       if (trip.members.isNotEmpty) {
@@ -58,8 +55,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _startDateController.dispose();
-    _endDateController.dispose();
+    _dateController.dispose();
     _budgetController.dispose();
     super.dispose();
   }
@@ -126,14 +122,13 @@ class _AddTripsPageState extends State<AddTripsPage> {
         id: widget.tripToEdit?.id ?? '',
         title: _titleController.text,
         location: _descriptionController.text,
-        date: _startDateController.text, // Using the simple string date
+        date: _dateController.text,
         imageUrl: imageUrl,
         amount: widget.tripToEdit?.amount ?? "0\$",
         members: memberUIDs,
         invitedEmails: _invitedEmails,
         shareCode: shareCode,
         budget: double.tryParse(_budgetController.text) ?? 0.0,
-        // --- THIS LINE IS THE FIX ---
         createdAt: widget.tripToEdit?.createdAt ?? Timestamp.now(),
       );
 
@@ -176,23 +171,14 @@ class _AddTripsPageState extends State<AddTripsPage> {
             TextButton(child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)), onPressed: () => Navigator.of(dialogContext).pop()),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: primaryActionColor),
-              child: const Text('Add', style: TextStyle(color: primaryActionTextColor)),
-              onPressed: () async {
+              child: const Text('Invite', style: TextStyle(color: primaryActionTextColor)),
+              // --- MODIFIED LOGIC ---
+              onPressed: () {
                 if (dialogFormKey.currentState!.validate()) {
                   final email = emailController.text.trim();
-                  final querySnapshot = await FirebaseFirestore.instance.collection('users').where('email', isEqualTo: email).limit(1).get();
-                  if (mounted) {
-                    if (querySnapshot.docs.isNotEmpty) {
-                      final userDoc = querySnapshot.docs.first;
-                      setState(() {
-                        _membersInfo[userDoc.id] = userDoc.data()['email'];
-                      });
-                      Navigator.of(dialogContext).pop();
-                    } else {
-                      Navigator.of(dialogContext).pop();
-                      _showInviteConfirmationDialog(email);
-                    }
-                  }
+                  // No longer check if the user exists. Always send an invite.
+                  Navigator.of(dialogContext).pop(); // Close this dialog
+                  _showInviteConfirmationDialog(email); // Show confirmation to send
                 }
               },
             ),
@@ -208,8 +194,8 @@ class _AddTripsPageState extends State<AddTripsPage> {
         builder: (BuildContext dialogContext) {
           return AlertDialog(
             backgroundColor: darkBackgroundColor,
-            title: const Text('User Not Found', style: TextStyle(color: textPrimaryColor)),
-            content: Text('No user exists with the email "$email". Would you like to send them an email invitation to join this trip?', style: const TextStyle(color: textSecondaryColor)),
+            title: const Text('Send Invitation?', style: TextStyle(color: textPrimaryColor)),
+            content: Text('This will prepare an email invitation for "$email" containing the trip\'s share code.', style: const TextStyle(color: textSecondaryColor)),
             actions: [
               TextButton(child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)), onPressed: () => Navigator.of(dialogContext).pop()),
               ElevatedButton(
@@ -340,8 +326,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
                 },
               ),
               const SizedBox(height: 16),
-              // We'll use a single date field for now to match the simplified model
-              _buildTextField(controller: _startDateController, label: 'Trip Date', readOnly: true, onTap: () => _selectDate(context, _startDateController), validator: (value) => value!.isEmpty ? 'Select a date' : null, suffixIcon: IconButton(icon: const Icon(Icons.calendar_today_outlined, color: textSecondaryColor), onPressed: () => _selectDate(context, _startDateController))),
+              _buildTextField(controller: _dateController, label: 'Trip Date', readOnly: true, onTap: () => _selectDate(context, _dateController), validator: (value) => value!.isEmpty ? 'Select a date' : null, suffixIcon: IconButton(icon: const Icon(Icons.calendar_today_outlined, color: textSecondaryColor), onPressed: () => _selectDate(context, _dateController))),
               const SizedBox(height: 16),
               if (_membersInfo.isNotEmpty || _invitedEmails.isNotEmpty)
                 Container(

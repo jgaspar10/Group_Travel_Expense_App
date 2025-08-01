@@ -27,6 +27,8 @@ class TripOverviewPage extends StatefulWidget {
 class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   Map<String, String> _memberNames = {};
+  // --- NEW: State variable to track if names are being loaded ---
+  bool _isLoadingNames = true;
 
   @override
   void initState() {
@@ -48,7 +50,18 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
   }
 
   Future<void> _fetchMemberNames() async {
-    if (widget.trip.members.isEmpty) return;
+    // Ensure the loading state is true at the start
+    setState(() {
+      _isLoadingNames = true;
+    });
+
+    if (widget.trip.members.isEmpty) {
+      setState(() {
+        _isLoadingNames = false;
+      });
+      return;
+    }
+
     try {
       final usersSnapshot = await FirebaseFirestore.instance.collection('users').where(FieldPath.documentId, whereIn: widget.trip.members).get();
       final Map<String, String> fetchedNames = {};
@@ -58,13 +71,20 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
       if (mounted) {
         setState(() {
           _memberNames = fetchedNames;
+          _isLoadingNames = false; // --- MODIFIED: Set loading to false after success ---
         });
       }
     } catch (e) {
       print("Error fetching member names: $e");
+      if (mounted) {
+        setState(() {
+          _isLoadingNames = false; // --- MODIFIED: Also set loading to false on error ---
+        });
+      }
     }
   }
 
+  // --- No changes to the dialogs or other functions, they will now work correctly ---
   void _showAddExpenseDialog() {
     final descriptionController = TextEditingController();
     final amountController = TextEditingController();
@@ -357,7 +377,10 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
             ),
           ];
         },
-        body: TabBarView(
+        // --- MODIFIED: Show a loader while names are being fetched ---
+        body: _isLoadingNames
+            ? const Center(child: CircularProgressIndicator(color: primaryActionColor))
+            : TabBarView(
           controller: _tabController,
           children: [
             _buildOverviewTab(),

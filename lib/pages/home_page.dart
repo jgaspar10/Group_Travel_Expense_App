@@ -1,14 +1,13 @@
 // lib/pages/home_page.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Add missing imports
-import 'package:firebase_auth/firebase_auth.dart'; // Add missing imports
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'receipts_page.dart';
 import 'add_trips_page.dart';
 import 'profile_page.dart';
 import 'trips_view.dart';
 import 'true_home_page.dart';
 
-// Your color constants...
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
 const Color primaryActionColor = Color(0xFF4AB19D);
@@ -50,18 +49,11 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // --- ADDED back the join trip functions ---
+  // --- MODIFIED: Simplified to be more robust ---
   Future<void> _joinTrip(String shareCode) async {
     if (shareCode.isEmpty) return;
-
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator(color: primaryActionColor)),
-    );
 
     try {
       final querySnapshot = await FirebaseFirestore.instance
@@ -69,8 +61,6 @@ class _HomePageState extends State<HomePage> {
           .where('shareCode', isEqualTo: shareCode.trim())
           .limit(1)
           .get();
-
-      Navigator.of(context).pop();
 
       if (querySnapshot.docs.isEmpty) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Trip not found. Please check the code.")));
@@ -85,7 +75,6 @@ class _HomePageState extends State<HomePage> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Successfully joined '${tripDoc['title']}'!")));
 
     } catch (e) {
-      Navigator.of(context).pop();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("An error occurred. Please try again.")));
       print("Error joining trip: $e");
     }
