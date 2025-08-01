@@ -9,7 +9,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/trip_model.dart';
 
-// Your color constants...
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
 const Color textSecondaryColor = Colors.white70;
@@ -31,7 +30,9 @@ class _AddTripsPageState extends State<AddTripsPage> {
   final _descriptionController = TextEditingController();
   final _startDateController = TextEditingController();
   final _endDateController = TextEditingController();
-  final _budgetController = TextEditingController(); // ADDED: Controller for budget
+  final _budgetController = TextEditingController();
+  DateTime? _startDate;
+  DateTime? _endDate;
   File? _tripImageFile;
   Map<String, String> _membersInfo = {};
   List<String> _invitedEmails = [];
@@ -43,13 +44,24 @@ class _AddTripsPageState extends State<AddTripsPage> {
       final trip = widget.tripToEdit!;
       _titleController.text = trip.title;
       _descriptionController.text = trip.location;
+      // Note: Reverted to the simple 'date' string for now
       _startDateController.text = trip.date;
-      _budgetController.text = trip.budget.toStringAsFixed(2); // ADDED: Pre-fill budget
+      _budgetController.text = trip.budget.toStringAsFixed(2);
       _invitedEmails = List<String>.from(trip.invitedEmails);
       if (trip.members.isNotEmpty) {
         _fetchMemberInfo(trip.members);
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _startDateController.dispose();
+    _endDateController.dispose();
+    _budgetController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchMemberInfo(List<String> memberUIDs) async {
@@ -67,24 +79,6 @@ class _AddTripsPageState extends State<AddTripsPage> {
       }
     } catch (e) {
       print("Error fetching member info: $e");
-    }
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _startDateController.dispose();
-    _endDateController.dispose();
-    _budgetController.dispose(); // ADDED: Dispose new controller
-    super.dispose();
-  }
-
-  Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() { _tripImageFile = File(pickedFile.path); });
     }
   }
 
@@ -111,12 +105,65 @@ class _AddTripsPageState extends State<AddTripsPage> {
     }
   }
 
+  Future<void> _saveTrip() async {
+    if (!_formKey.currentState!.validate()) { return; }
+
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    if (!_membersInfo.containsKey(user.uid)) {
+      setState(() { _membersInfo[user.uid] = user.email ?? 'Creator'; });
+    }
+
+    final List<String> memberUIDs = _membersInfo.keys.toList();
+    String imageUrl = widget.tripToEdit?.imageUrl ?? 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=60';
+    if (_tripImageFile != null) { /* TODO: Image upload logic */ }
+
+    try {
+      final shareCode = widget.tripToEdit?.shareCode ?? String.fromCharCodes(Iterable.generate(6, (_) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.codeUnitAt(Random.secure().nextInt(36))));
+
+      final newTrip = Trip(
+        id: widget.tripToEdit?.id ?? '',
+        title: _titleController.text,
+        location: _descriptionController.text,
+        date: _startDateController.text, // Using the simple string date
+        imageUrl: imageUrl,
+        amount: widget.tripToEdit?.amount ?? "0\$",
+        members: memberUIDs,
+        invitedEmails: _invitedEmails,
+        shareCode: shareCode,
+        budget: double.tryParse(_budgetController.text) ?? 0.0,
+        // --- THIS LINE IS THE FIX ---
+        createdAt: widget.tripToEdit?.createdAt ?? Timestamp.now(),
+      );
+
+      if (widget.tripToEdit == null) {
+        DocumentReference docRef = await FirebaseFirestore.instance.collection('trips').add(newTrip.toMap());
+        await docRef.update({'id': docRef.id});
+      } else {
+        await FirebaseFirestore.instance.collection('trips').doc(widget.tripToEdit!.id).update(newTrip.toMap());
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save trip: $e')));
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _tripImageFile = File(pickedFile.path);
+      });
+    }
+  }
+
   void _addMember() { _showAddMemberByEmailDialog(); }
 
   Future<void> _showAddMemberByEmailDialog() async {
     final emailController = TextEditingController();
     final dialogFormKey = GlobalKey<FormState>();
-
     return showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -137,7 +184,9 @@ class _AddTripsPageState extends State<AddTripsPage> {
                   if (mounted) {
                     if (querySnapshot.docs.isNotEmpty) {
                       final userDoc = querySnapshot.docs.first;
-                      setState(() { _membersInfo[userDoc.id] = userDoc.data()['email']; });
+                      setState(() {
+                        _membersInfo[userDoc.id] = userDoc.data()['email'];
+                      });
                       Navigator.of(dialogContext).pop();
                     } else {
                       Navigator.of(dialogContext).pop();
@@ -167,7 +216,11 @@ class _AddTripsPageState extends State<AddTripsPage> {
                 style: ElevatedButton.styleFrom(backgroundColor: primaryActionColor),
                 child: const Text('Send Invite', style: TextStyle(color: primaryActionTextColor)),
                 onPressed: () {
-                  setState(() { if (!_invitedEmails.contains(email)) { _invitedEmails.add(email); } });
+                  setState(() {
+                    if (!_invitedEmails.contains(email)) {
+                      _invitedEmails.add(email);
+                    }
+                  });
                   _sendInviteEmail(email);
                   Navigator.of(dialogContext).pop();
                 },
@@ -184,54 +237,11 @@ class _AddTripsPageState extends State<AddTripsPage> {
     try {
       if (await canLaunchUrl(emailLaunchUri)) {
         await launchUrl(emailLaunchUri);
-      } else { throw 'Could not launch email app'; }
-    } catch (e) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not launch email app: $e')));
-    }
-  }
-
-  Future<void> _saveTrip() async {
-    if (!_formKey.currentState!.validate()) { return; }
-
-    final User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You must be logged in.')));
-      return;
-    }
-
-    if (!_membersInfo.containsKey(user.uid)) {
-      setState(() { _membersInfo[user.uid] = user.email ?? 'Creator'; });
-    }
-
-    final List<String> memberUIDs = _membersInfo.keys.toList();
-    String imageUrl = widget.tripToEdit?.imageUrl ?? 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=60';
-    if (_tripImageFile != null) { /* TODO: Image upload logic */ imageUrl = _tripImageFile!.path; }
-
-    try {
-      final shareCode = widget.tripToEdit?.shareCode ?? String.fromCharCodes(Iterable.generate(6, (_) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.codeUnitAt(Random.secure().nextInt(36))));
-
-      final newTrip = Trip(
-        id: widget.tripToEdit?.id ?? '',
-        title: _titleController.text,
-        location: _descriptionController.text,
-        date: _startDateController.text,
-        imageUrl: imageUrl,
-        amount: widget.tripToEdit?.amount ?? "0\$",
-        members: memberUIDs,
-        invitedEmails: _invitedEmails,
-        shareCode: shareCode,
-        budget: double.tryParse(_budgetController.text) ?? 0.0, // ADDED
-      );
-
-      if (widget.tripToEdit == null) {
-        DocumentReference docRef = await FirebaseFirestore.instance.collection('trips').add(newTrip.toMap());
-        await docRef.update({'id': docRef.id});
       } else {
-        await FirebaseFirestore.instance.collection('trips').doc(widget.tripToEdit!.id).update(newTrip.toMap());
+        throw 'Could not launch email app';
       }
-      if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save trip: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not launch email app: $e')));
     }
   }
 
@@ -287,7 +297,6 @@ class _AddTripsPageState extends State<AddTripsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              // Image Picker
               GestureDetector(
                 onTap: _pickImage,
                 child: Container(
@@ -316,14 +325,10 @@ class _AddTripsPageState extends State<AddTripsPage> {
                 ),
               ),
               const SizedBox(height: 24),
-
-              // Title and Description
               _buildTextField(controller: _titleController, label: 'Trip Title', validator: (value) => value!.isEmpty ? 'Please enter a trip title' : null),
               const SizedBox(height: 16),
               _buildTextField(controller: _descriptionController, label: 'Trip Description', multiLine: true),
               const SizedBox(height: 16),
-
-              // --- ADDED: Budget Text Field ---
               _buildTextField(
                 controller: _budgetController,
                 label: 'Trip Budget (\$)',
@@ -335,18 +340,9 @@ class _AddTripsPageState extends State<AddTripsPage> {
                 },
               ),
               const SizedBox(height: 16),
-
-              // Date Fields
-              Row(
-                children: <Widget>[
-                  Expanded(child: _buildTextField(controller: _startDateController, label: 'Trip Start Date', readOnly: true, onTap: () => _selectDate(context, _startDateController), validator: (value) => value!.isEmpty ? 'Select start date' : null, suffixIcon: IconButton(icon: const Icon(Icons.calendar_today_outlined, color: textSecondaryColor), onPressed: () => _selectDate(context, _startDateController)))),
-                  const Padding(padding: EdgeInsets.symmetric(horizontal: 8.0), child: Text('TO', style: TextStyle(color: textSecondaryColor, fontSize: 16))),
-                  Expanded(child: _buildTextField(controller: _endDateController, label: 'Trip End Date', readOnly: true, onTap: () => _selectDate(context, _endDateController), validator: (value) => value!.isEmpty ? 'Select end date' : null, suffixIcon: IconButton(icon: const Icon(Icons.calendar_today_outlined, color: textSecondaryColor), onPressed: () => _selectDate(context, _endDateController)))),
-                ],
-              ),
+              // We'll use a single date field for now to match the simplified model
+              _buildTextField(controller: _startDateController, label: 'Trip Date', readOnly: true, onTap: () => _selectDate(context, _startDateController), validator: (value) => value!.isEmpty ? 'Select a date' : null, suffixIcon: IconButton(icon: const Icon(Icons.calendar_today_outlined, color: textSecondaryColor), onPressed: () => _selectDate(context, _startDateController))),
               const SizedBox(height: 16),
-
-              // Members display
               if (_membersInfo.isNotEmpty || _invitedEmails.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.all(12.0),
@@ -361,8 +357,6 @@ class _AddTripsPageState extends State<AddTripsPage> {
                   ),
                 ),
               const SizedBox(height: 16),
-
-              // Add Member button
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
                 decoration: BoxDecoration(color: inputFieldFillColor, borderRadius: BorderRadius.circular(8.0)),
@@ -375,8 +369,6 @@ class _AddTripsPageState extends State<AddTripsPage> {
                 ),
               ),
               const SizedBox(height: 32),
-
-              // Save button
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                     backgroundColor: primaryActionColor,

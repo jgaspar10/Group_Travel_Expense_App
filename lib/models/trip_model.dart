@@ -11,7 +11,8 @@ class Trip {
   final List<String> members;
   final List<String> invitedEmails;
   final String shareCode;
-  final double budget; // ADDED: To store the trip's budget
+  final double budget;
+  final Timestamp createdAt; // ADDED THIS LINE
 
   Trip({
     required this.id,
@@ -23,7 +24,8 @@ class Trip {
     required this.members,
     required this.invitedEmails,
     required this.shareCode,
-    required this.budget, // ADDED
+    required this.budget,
+    required this.createdAt, // ADDED THIS LINE
   });
 
   Map<String, dynamic> toMap() {
@@ -37,7 +39,7 @@ class Trip {
       'members': members,
       'invitedEmails': invitedEmails,
       'shareCode': shareCode,
-      'budget': budget, // ADDED
+      'budget': budget,
       'createdAt': Timestamp.now(),
     };
   }
@@ -54,7 +56,8 @@ class Trip {
       members: List<String>.from(data['members'] ?? []),
       invitedEmails: List<String>.from(data['invitedEmails'] ?? []),
       shareCode: data['shareCode'] ?? '',
-      budget: (data['budget'] ?? 0.0).toDouble(), // ADDED
+      budget: (data['budget'] ?? 0.0).toDouble(),
+      createdAt: data['createdAt'] ?? Timestamp.now(), // ADDED THIS LINE
     );
   }
 }

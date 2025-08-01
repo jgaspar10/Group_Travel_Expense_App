@@ -6,9 +6,9 @@ import 'package:intl/intl.dart';
 import '../models/trip_model.dart';
 import '../models/expense_model.dart';
 import '../models/plan_model.dart';
+import '../widgets/balance_summary_card.dart';
 import 'add_trips_page.dart';
 
-// Your existing color constants from other files
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
 const Color textSecondaryColor = Colors.white70;
@@ -222,7 +222,6 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
                           return;
                         }
                         final planDateTime = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, selectedTime!.hour, selectedTime!.minute);
-
                         _savePlan(title: titleController.text.trim(), description: descriptionController.text.trim(), time: Timestamp.fromDate(planDateTime));
                         Navigator.pop(context);
                       }
@@ -253,6 +252,67 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
     }
   }
 
+  Future<void> _showDeleteConfirmationDialog() async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: darkBackgroundColor,
+          title: const Text('Delete Trip?', style: TextStyle(color: textPrimaryColor)),
+          content: const SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text('This action is permanent and cannot be undone.', style: TextStyle(color: textSecondaryColor)),
+                Text('All associated plans and expenses will also be deleted.', style: TextStyle(color: textSecondaryColor)),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              style: TextButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text('Delete', style: TextStyle(color: textPrimaryColor)),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _deleteTrip();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteTrip() async {
+    try {
+      final tripRef = FirebaseFirestore.instance.collection('trips').doc(widget.trip.id);
+      final expenses = await tripRef.collection('expenses').get();
+      for (final doc in expenses.docs) {
+        await doc.reference.delete();
+      }
+      final plans = await tripRef.collection('plans').get();
+      for (final doc in plans.docs) {
+        await doc.reference.delete();
+      }
+      await tripRef.delete();
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete trip: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -265,7 +325,6 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
               pinned: true,
               backgroundColor: darkBackgroundColor,
               iconTheme: const IconThemeData(color: textPrimaryColor),
-              // --- MODIFIED: ADDED DELETE BUTTON ---
               actions: [
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
@@ -325,16 +384,13 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: textPrimaryColor)));
         if (snapshot.data!.docs.isEmpty) return const Center(child: Text('No expenses added yet.', style: TextStyle(color: textSecondaryColor)));
-
         final expenses = snapshot.data!.docs.map((doc) => Expense.fromFirestore(doc)).toList();
-
         return ListView.builder(
           padding: const EdgeInsets.all(8.0),
           itemCount: expenses.length,
           itemBuilder: (context, index) {
             final expense = expenses[index];
             final payerName = _memberNames[expense.paidBy] ?? '...';
-
             return Card(
               color: inputFieldFillColor,
               margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -359,9 +415,7 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
         if (snapshot.data!.docs.isEmpty) {
           return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.edit_calendar, size: 60, color: textSecondaryColor), const SizedBox(height: 16), const Text('No plans added yet.', style: TextStyle(color: textSecondaryColor))]));
         }
-
         final plans = snapshot.data!.docs.map((doc) => Plan.fromFirestore(doc)).toList();
-
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 16),
           itemCount: plans.length,
@@ -399,19 +453,10 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
-        Container(
-          padding: const EdgeInsets.all(16.0),
-          decoration: BoxDecoration(color: inputFieldFillColor, borderRadius: BorderRadius.circular(12.0)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Expenses', style: TextStyle(color: textPrimaryColor, fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('Spent: \$0 of \$0', style: TextStyle(color: textSecondaryColor)),
-              const SizedBox(height: 8),
-              ClipRRect(borderRadius: BorderRadius.circular(10), child: LinearProgressIndicator(value: 0.0, backgroundColor: textSecondaryColor.withOpacity(0.3), valueColor: const AlwaysStoppedAnimation<Color>(primaryActionColor), minHeight: 8)),
-            ],
-          ),
+        BalanceSummaryCard(
+          tripId: widget.trip.id,
+          memberUids: widget.trip.members,
+          memberNames: _memberNames,
         ),
         const SizedBox(height: 24),
         ElevatedButton.icon(
@@ -426,81 +471,10 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
         const ListTile(
           contentPadding: EdgeInsets.zero,
           leading: CircleAvatar(backgroundColor: Colors.blue),
-          title: Text('Balance calculations coming soon!', style: TextStyle(color: textPrimaryColor)),
+          title: Text('More features coming soon!', style: TextStyle(color: textPrimaryColor)),
           trailing: Text('Settle Up', style: TextStyle(color: primaryActionColor)),
         ),
       ],
     );
-  }
-
-  // --- NEW: FUNCTION TO SHOW DELETE CONFIRMATION ---
-  Future<void> _showDeleteConfirmationDialog() async {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false, // User must tap button!
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: darkBackgroundColor,
-          title: const Text('Delete Trip?', style: TextStyle(color: textPrimaryColor)),
-          content: const SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                Text('This action is permanent and cannot be undone.', style: TextStyle(color: textSecondaryColor)),
-                Text('All associated plans and expenses will also be deleted.', style: TextStyle(color: textSecondaryColor)),
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel', style: TextStyle(color: textSecondaryColor)),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              style: TextButton.styleFrom(backgroundColor: Colors.redAccent),
-              child: const Text('Delete', style: TextStyle(color: textPrimaryColor)),
-              onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
-                _deleteTrip(); // Then call the delete function
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // --- NEW: FUNCTION TO DELETE TRIP AND ALL ITS SUBCOLLECTIONS ---
-  Future<void> _deleteTrip() async {
-    try {
-      final tripRef = FirebaseFirestore.instance.collection('trips').doc(widget.trip.id);
-
-      // Delete all documents in the 'expenses' subcollection
-      final expenses = await tripRef.collection('expenses').get();
-      for (final doc in expenses.docs) {
-        await doc.reference.delete();
-      }
-
-      // Delete all documents in the 'plans' subcollection
-      final plans = await tripRef.collection('plans').get();
-      for (final doc in plans.docs) {
-        await doc.reference.delete();
-      }
-
-      // Finally, delete the trip document itself
-      await tripRef.delete();
-
-      if (mounted) {
-        // Pop the overview page to return to the home page
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete trip: $e')),
-        );
-      }
-    }
   }
 }
