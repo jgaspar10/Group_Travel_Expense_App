@@ -8,6 +8,7 @@ import '../models/expense_model.dart';
 import '../models/plan_model.dart';
 import '../widgets/balance_summary_card.dart';
 import 'add_trips_page.dart';
+import '../services/user_data_service.dart';
 
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
@@ -25,9 +26,9 @@ class TripOverviewPage extends StatefulWidget {
 }
 
 class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerProviderStateMixin {
+  final UserDataService _userDataService = UserDataService();
   late TabController _tabController;
   Map<String, String> _memberNames = {};
-  // --- NEW: State variable to track if names are being loaded ---
   bool _isLoadingNames = true;
 
   @override
@@ -35,10 +36,9 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
-      if (mounted) {
-        setState(() {});
-      }
+      if (mounted) { setState(() {}); }
     });
+    _userDataService.addListener(_onDataChanged);
     _fetchMemberNames();
   }
 
@@ -46,22 +46,22 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
   void dispose() {
     _tabController.removeListener(() {});
     _tabController.dispose();
+    _userDataService.removeListener(_onDataChanged);
     super.dispose();
   }
 
-  Future<void> _fetchMemberNames() async {
-    // Ensure the loading state is true at the start
-    setState(() {
-      _isLoadingNames = true;
-    });
+  void _onDataChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
+  Future<void> _fetchMemberNames() async {
+    setState(() { _isLoadingNames = true; });
     if (widget.trip.members.isEmpty) {
-      setState(() {
-        _isLoadingNames = false;
-      });
+      setState(() { _isLoadingNames = false; });
       return;
     }
-
     try {
       final usersSnapshot = await FirebaseFirestore.instance.collection('users').where(FieldPath.documentId, whereIn: widget.trip.members).get();
       final Map<String, String> fetchedNames = {};
@@ -71,20 +71,17 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
       if (mounted) {
         setState(() {
           _memberNames = fetchedNames;
-          _isLoadingNames = false; // --- MODIFIED: Set loading to false after success ---
+          _isLoadingNames = false;
         });
       }
     } catch (e) {
       print("Error fetching member names: $e");
       if (mounted) {
-        setState(() {
-          _isLoadingNames = false; // --- MODIFIED: Also set loading to false on error ---
-        });
+        setState(() { _isLoadingNames = false; });
       }
     }
   }
 
-  // --- No changes to the dialogs or other functions, they will now work correctly ---
   void _showAddExpenseDialog() {
     final descriptionController = TextEditingController();
     final amountController = TextEditingController();
@@ -112,7 +109,11 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
                 TextFormField(
                   controller: amountController,
                   style: const TextStyle(color: textPrimaryColor),
-                  decoration: const InputDecoration(labelText: 'Amount', prefixText: '\$', labelStyle: TextStyle(color: textSecondaryColor)),
+                  decoration: InputDecoration(
+                      labelText: 'Amount',
+                      prefixText: _userDataService.currencySymbol ?? '£',
+                      labelStyle: const TextStyle(color: textSecondaryColor)
+                  ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   validator: (val) => val!.isEmpty ? 'Enter an amount' : null,
                 ),
@@ -377,7 +378,6 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
             ),
           ];
         },
-        // --- MODIFIED: Show a loader while names are being fetched ---
         body: _isLoadingNames
             ? const Center(child: CircularProgressIndicator(color: primaryActionColor))
             : TabBarView(
@@ -401,6 +401,7 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
   }
 
   Widget _buildExpensesList() {
+    final currencySymbol = _userDataService.currencySymbol ?? '£';
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('trips').doc(widget.trip.id).collection('expenses').orderBy('createdAt', descending: true).snapshots(),
       builder: (context, snapshot) {
@@ -421,7 +422,7 @@ class _TripOverviewPageState extends State<TripOverviewPage> with SingleTickerPr
                 leading: const Icon(Icons.receipt, color: textSecondaryColor),
                 title: Text(expense.description, style: const TextStyle(color: textPrimaryColor, fontWeight: FontWeight.bold)),
                 subtitle: Text('Paid by $payerName on ${DateFormat.yMd().format(expense.createdAt.toDate())}', style: const TextStyle(color: textSecondaryColor)),
-                trailing: Text('\$${expense.amount.toStringAsFixed(2)}', style: const TextStyle(color: primaryActionColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                trailing: Text('$currencySymbol${expense.amount.toStringAsFixed(2)}', style: const TextStyle(color: primaryActionColor, fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             );
           },

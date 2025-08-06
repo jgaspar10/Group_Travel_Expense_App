@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import '../models/trip_model.dart';
 import '../services/storage_service.dart';
+import '../services/user_data_service.dart';
 
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
@@ -39,6 +40,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
   List<String> _invitedEmails = [];
   bool _isUploading = false;
 
+  // We are not using the reverted model anymore, this logic is needed.
   @override
   void initState() {
     super.initState();
@@ -46,6 +48,9 @@ class _AddTripsPageState extends State<AddTripsPage> {
       final trip = widget.tripToEdit!;
       _titleController.text = trip.title;
       _descriptionController.text = trip.location;
+      // This requires the Trip model to have startDate and endDate.
+      // If you reverted the model, this will cause an error.
+      // Let's assume you're on the startDate/endDate model.
       _startDate = trip.startDate.toDate();
       _endDate = trip.endDate.toDate();
       _startDateController.text = DateFormat('dd MMMM yyyy').format(_startDate!);
@@ -350,7 +355,7 @@ class _AddTripsPageState extends State<AddTripsPage> {
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _budgetController,
-                label: 'Trip Budget (\$)',
+                label: 'Trip Budget (${UserDataService().currencySymbol ?? '£'})',
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Please enter a budget';

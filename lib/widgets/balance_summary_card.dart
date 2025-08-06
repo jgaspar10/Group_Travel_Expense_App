@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/expense_model.dart';
+import '../services/user_data_service.dart'; // Import the service
 
 // Color constants
 const Color textPrimaryColor = Colors.white;
@@ -26,6 +27,7 @@ class BalanceSummaryCard extends StatefulWidget {
 }
 
 class _BalanceSummaryCardState extends State<BalanceSummaryCard> {
+  final UserDataService _userDataService = UserDataService();
   bool _isLoading = true;
   double _totalTripCost = 0.0;
   Map<String, double> _balances = {};
@@ -36,7 +38,20 @@ class _BalanceSummaryCardState extends State<BalanceSummaryCard> {
     _calculateBalances();
   }
 
+  // This method is now automatically called when the parent widget rebuilds
+  // due to a currency change, so we don't need a separate listener here.
+  @override
+  void didUpdateWidget(covariant BalanceSummaryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Recalculate if the members change (e.g., someone new joins)
+    if (widget.memberUids.length != oldWidget.memberUids.length) {
+      _calculateBalances();
+    }
+  }
+
   Future<void> _calculateBalances() async {
+    setState(() { _isLoading = true; });
+
     if (widget.memberUids.isEmpty) {
       setState(() { _isLoading = false; });
       return;
@@ -56,7 +71,6 @@ class _BalanceSummaryCardState extends State<BalanceSummaryCard> {
     for (var expense in expenses) {
       totalCost += expense.amount;
     }
-    _totalTripCost = totalCost;
 
     // 3. Calculate each person's share
     final double sharePerPerson = totalCost / widget.memberUids.length;
@@ -73,13 +87,20 @@ class _BalanceSummaryCardState extends State<BalanceSummaryCard> {
       final paid = totalPaidPerMember[uid] ?? 0.0;
       finalBalances[uid] = paid - sharePerPerson;
     }
-    _balances = finalBalances;
 
-    setState(() { _isLoading = false; });
+    if(mounted) {
+      setState(() {
+        _totalTripCost = totalCost;
+        _balances = finalBalances;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final currencySymbol = _userDataService.currencySymbol ?? '£';
+
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
@@ -93,9 +114,9 @@ class _BalanceSummaryCardState extends State<BalanceSummaryCard> {
         children: [
           const Text('Balances', style: TextStyle(color: textPrimaryColor, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text('Total Spent: \$${_totalTripCost.toStringAsFixed(2)}', style: const TextStyle(color: textSecondaryColor)),
+          Text('Total Spent: $currencySymbol${_totalTripCost.toStringAsFixed(2)}', style: const TextStyle(color: textSecondaryColor)),
           const Divider(color: textSecondaryColor, height: 24),
-          // Build a list of balances for each member
+
           ...widget.memberUids.map((uid) {
             final balance = _balances[uid] ?? 0.0;
             final name = widget.memberNames[uid] ?? 'Unknown User';
@@ -107,11 +128,13 @@ class _BalanceSummaryCardState extends State<BalanceSummaryCard> {
                 children: [
                   Text(name, style: const TextStyle(color: textPrimaryColor, fontSize: 16)),
                   Text(
-                    balance >= 0
-                        ? 'is owed \$${balance.toStringAsFixed(2)}'
-                        : 'owes \$${(-balance).toStringAsFixed(2)}',
+                    balance.abs() < 0.01 // Use a small tolerance for zero
+                        ? 'is settled up'
+                        : balance > 0
+                        ? 'is owed $currencySymbol${balance.toStringAsFixed(2)}'
+                        : 'owes $currencySymbol${(-balance).toStringAsFixed(2)}',
                     style: TextStyle(
-                        color: balance >= 0 ? Colors.greenAccent : Colors.redAccent,
+                        color: balance.abs() < 0.01 ? textSecondaryColor : (balance > 0 ? Colors.greenAccent : Colors.redAccent),
                         fontSize: 16,
                         fontWeight: FontWeight.bold
                     ),

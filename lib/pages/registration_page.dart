@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Your color constants...
 const Color darkBackgroundColor = Color(0xFF204051);
 const Color textPrimaryColor = Colors.white;
 const Color textSecondaryColor = Colors.white70;
@@ -50,10 +49,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
           'name': _nameController.text.trim(),
           'email': _emailController.text.trim(),
           'uid': userCredential.user!.uid,
-          'currency': 'GBP', // CHANGED: Default currency is now GBP
+          'currency': 'GBP',
         });
 
-        if (mounted) Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        // The AuthGate will handle navigation automatically.
+        if (mounted) Navigator.pop(context); // Just close the loading dialog
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) Navigator.pop(context);
@@ -120,7 +120,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         validator: (v) => v!.length < 6 ? 'Password must be at least 6 characters' : null,
                       ),
                       SizedBox(height: screenHeight * 0.05),
-
                       Align(
                         alignment: Alignment.centerRight,
                         child: InkWell(

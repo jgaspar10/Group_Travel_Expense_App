@@ -24,8 +24,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  bool _rememberMe = false; // State for the checkbox
+  bool _rememberMe = false;
 
   @override
   void initState() {
@@ -33,7 +32,6 @@ class _LoginPageState extends State<LoginPage> {
     _loadUserEmail();
   }
 
-  // Load saved email from local storage
   void _loadUserEmail() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final String? email = prefs.getString('rememberedEmail');
@@ -57,7 +55,6 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // Save or remove the email based on the checkbox
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     if (_rememberMe) {
       await prefs.setString('rememberedEmail', _emailController.text.trim());
@@ -77,11 +74,12 @@ class _LoginPageState extends State<LoginPage> {
         password: _passwordController.text.trim(),
       );
 
-      if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-      }
+      // The AuthGate will handle navigation automatically.
+      // We no longer need to navigate manually from here.
+      if (mounted) Navigator.pop(context); // Just close the loading dialog
+
     } on FirebaseAuthException catch (e) {
-      if (mounted) Navigator.pop(context); // Close loading dialog
+      if (mounted) Navigator.pop(context);
       String errorMessage = 'An error occurred. Please try again.';
       if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
         errorMessage = 'No user found for that email or wrong password.';
@@ -102,7 +100,6 @@ class _LoginPageState extends State<LoginPage> {
       body: SafeArea(
         child: Row(
           children: <Widget>[
-            // ... Vertical Text Section as before ...
             Container(
               width: screenWidth * 0.25,
               padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 20.0),
@@ -133,7 +130,6 @@ class _LoginPageState extends State<LoginPage> {
                         obscureText: true,
                         validator: (v) => v!.isEmpty ? 'Please enter your password' : null,
                       ),
-                      // --- ADDED: Remember Me Checkbox ---
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8.0),
                         child: Row(
